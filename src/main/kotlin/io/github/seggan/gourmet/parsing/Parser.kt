@@ -33,8 +33,8 @@ object Parser : Grammar<List<AstNode>>() {
     val COMMENT by regexToken("//.*\\n", ignore = true)
 
     val number by NUMBER use { AstNode.Number(text.toUInt()) }
-    val register by -DOLLAR * ID use { AstNode.Register(text.substring(1)) }
-    val stack by -AT * ID use { AstNode.Stack(text.substring(1)) }
+    val register by -DOLLAR * ID use { AstNode.Register(text) }
+    val stack by -AT * ID use { AstNode.Stack(text) }
     val variable by ID use { AstNode.Variable(text) }
     val block by -BOPEN * zeroOrMore(parser(::invocation)) * -BCLOSE map { AstNode.Block(it) }
 
@@ -42,9 +42,7 @@ object Parser : Grammar<List<AstNode>>() {
 
     val invocation by optional(stack * -PERIOD) *
             ID * separatedTerms(expr, COMMA, acceptZero = true) *
-            -SEMICOLON map { (stack, name, args) ->
-        AstNode.Invocation(stack, name.text, args)
-    }
+            -SEMICOLON map { (stack, name, args) -> AstNode.Invocation(stack, name.text, args) }
 
     val macro by -MACRO * ID *
             -POPEN * separatedTerms(ID, COMMA, acceptZero = true) * -PCLOSE *
