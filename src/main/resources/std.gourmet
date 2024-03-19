@@ -1,0 +1,43 @@
+macro inc reg {
+    push reg;
+    add 1;
+    pop reg;
+}
+
+macro dec reg {
+    push reg;
+    sub 1;
+    pop reg;
+}
+
+macro even num {
+    push 1;
+    push 0;
+    rot num;
+    pop;
+}
+
+macro odd num {
+    push 0;
+    push 1;
+    rot num;
+    pop;
+}
+
+macro if cond block { while cond { exec block; break; }; }
+
+macro if block { while { exec block; break; }; }
+
+macro not bool { even bool; }
+
+macro ifelse cond true false {
+    if cond true;
+    if { not cond; } false;
+}
+
+macro copy src dest {
+    push src;
+    pop dest;
+}
+
+macro pop { pop $null; }

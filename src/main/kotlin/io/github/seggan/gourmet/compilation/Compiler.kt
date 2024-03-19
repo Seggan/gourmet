@@ -70,14 +70,29 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
         return constants.computeIfAbsent(constant, ::getNewRegister)
     }
 
-    private fun getTempRegister(): Register {
-        return tempRegisters.removeLastOrNull() ?: getNewRegister(temp = true)
+    private fun getTempRegister(initial: Int? = null): Register {
+        val existing = tempRegisters.removeLastOrNull()
+        if (existing == null || initial != null) {
+            return getNewRegister(initial = initial ?: 0, temp = true)
+        }
+        return existing
     }
 
-    private fun AstNode.Expression.getRegister(stack: ChefStack): Register {
+    private fun AstNode.Expression.getRegister(stack: ChefStack, copy: Boolean = false): Register {
         return when (this) {
-            is AstNode.Number -> getConstant(value)
-            is AstNode.Register -> variables.getOrPut(name) { throw IllegalArgumentException("Invalid register: $name") }
+            is AstNode.Number -> if (copy) getConstant(value) else getTempRegister(value)
+            is AstNode.Register -> {
+                val reg = varToRegister()
+                if (copy) {
+                    val temp = getTempRegister()
+                    instructions += ChefStatement.Push(reg, stack)
+                    instructions += ChefStatement.Pop(temp, stack)
+                    temp
+                } else {
+                    reg
+                }
+            }
+
             is AstNode.Block -> {
                 compileBlock(body)
                 val reg = getTempRegister()
@@ -89,7 +104,7 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
         }
     }
 
-    private fun List<AstNode.Expression>.getRegister(stack: ChefStack): Register {
+    private fun List<AstNode.Expression>.getRegister(stack: ChefStack, copy: Boolean = false): Register {
         if (size > 1) {
             throw IllegalArgumentException("Invalid register list: $this")
         }
@@ -98,13 +113,17 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
             instructions += ChefStatement.Pop(temp, stack)
             return temp
         } else {
-            return get(0).getRegister(stack)
+            return get(0).getRegister(stack, copy)
         }
     }
 
     private fun AstNode.Expression.varToRegister(): Register {
         return if (this is AstNode.Register) {
-            variables.getOrPut(name) { throw IllegalArgumentException("Invalid register: $name") }
+            if (this.name == "null") {
+                getTempRegister()
+            } else {
+                variables[name] ?: throw IllegalArgumentException("Invalid register: $name")
+            }
         } else {
             throw IllegalArgumentException("Invalid expression type: $this")
         }
@@ -130,7 +149,16 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
     fun idef(stack: ChefStack, args: List<AstNode.Expression>) {
         val arg = args[0]
         if (arg is AstNode.Register) {
-            variables[arg.name] = getNewRegister()
+            variables[arg.name] = Register.Variable(getTempRegister().name)
+        } else {
+            throw IllegalArgumentException("Invalid register: $arg")
+        }
+    }
+
+    fun idel(stack: ChefStack, args: List<AstNode.Expression>) {
+        val arg = args[0]
+        if (arg is AstNode.Register) {
+            variables.remove(arg.name)?.let { tempRegisters += it }
         } else {
             throw IllegalArgumentException("Invalid register: $arg")
         }
@@ -145,7 +173,7 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
     }
 
     fun ipop(stack: ChefStack, args: List<AstNode.Expression>) {
-        instructions += ChefStatement.Pop(args[0].varToRegister(), stack)
+        instructions += ChefStatement.Pop(args[0].varToRegister().also(Register::close), stack)
     }
 
     fun iadd(stack: ChefStack, args: List<AstNode.Expression>) {
@@ -162,6 +190,23 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
 
     fun idiv(stack: ChefStack, args: List<AstNode.Expression>) {
         instructions += ChefStatement.Div(args[0].getRegister(stack).also(Register::close), stack)
+    }
+
+    fun irot(stack: ChefStack, args: List<AstNode.Expression>) {
+        val firstArg = args[0]
+        if (firstArg is AstNode.Number) {
+            instructions += ChefStatement.Rotate(stack, firstArg.value)
+        } else {
+            instructions += ChefStatement.RotateByReg(stack, firstArg.getRegister(stack).also(Register::close))
+        }
+    }
+
+    fun ishuffle(stack: ChefStack, args: List<AstNode.Expression>) {
+        instructions += ChefStatement.Randomize(stack)
+    }
+
+    fun iclear(stack: ChefStack, args: List<AstNode.Expression>) {
+        instructions += ChefStatement.Clear(stack)
     }
 
     fun iprint(stack: ChefStack, args: List<AstNode.Expression>) {
@@ -187,21 +232,63 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
         instructions += ChefStatement.Clear(printStack)
         buffered = 0
     }
+
+    fun ifor(stack: ChefStack, args: List<AstNode.Expression>) {
+        args.dropLast(1).getRegister(stack, true).use { reg ->
+            val block = args.last() as? AstNode.Block ?: throw IllegalArgumentException("Invalid block: ${args.last()}")
+            instructions += ChefStatement.StartLoop(reg)
+            compileBlock(block.body)
+            instructions += ChefStatement.EndLoop(reg)
+        }
+    }
+
+    fun iwhile(stack: ChefStack, args: List<AstNode.Expression>) {
+        args.dropLast(1).getRegister(stack, true).use { reg ->
+            val block = args.last() as? AstNode.Block ?: throw IllegalArgumentException("Invalid block: ${args.last()}")
+            instructions += ChefStatement.StartLoop(reg)
+            compileBlock(block.body)
+            instructions += ChefStatement.EndLoop(null)
+        }
+    }
+
+    fun ibreak(stack: ChefStack, args: List<AstNode.Expression>) {
+        instructions += ChefStatement.Break
+    }
+
+    //==========================================
+    fun iexec(stack: ChefStack, args: List<AstNode.Expression>) {
+        val arg = args[0]
+        if (arg is AstNode.Block) {
+            compileBlock(arg.body)
+        } else {
+            throw IllegalArgumentException("Invalid block: $arg")
+        }
+    }
     //</editor-fold>
 }
 
-private fun expandMacros(code: List<AstNode.Invocation>, macros: List<AstNode.Macro>): List<AstNode.Invocation> {
-    val macroNames = macros.associateBy { it.name }
+private fun expandMacros(
+    code: List<AstNode.Invocation>,
+    macros: List<AstNode.Macro>,
+    argMap: Map<String, AstNode.Expression> = emptyMap()
+): List<AstNode.Invocation> {
     return code.flatMap { invoc ->
-        if (invoc.name in macroNames) {
-            val macro = macroNames[invoc.name]!!
-            val args = macro.args.zip(invoc.args).toMap()
+        val mappedArgs = invoc.args.map { arg ->
+            when (arg) {
+                is AstNode.Variable -> argMap[arg.name] ?: arg
+                is AstNode.Block -> arg.copy(body = expandMacros(arg.body, macros, argMap))
+                else -> arg
+            }
+        }
+        val macro = macros.firstOrNull { it.name == invoc.name && it.args.size == invoc.args.size }
+        if (macro != null) {
+            val args = macro.args.zip(mappedArgs).toMap() + argMap
             macro.body.map { invocation ->
                 invocation.copy(
                     args = invocation.args.map { arg ->
                         when (arg) {
                             is AstNode.Variable -> args[arg.name] ?: arg
-                            is AstNode.Block -> arg.copy(body = expandMacros(arg.body, macros))
+                            is AstNode.Block -> arg.copy(body = expandMacros(arg.body, macros, args))
                             else -> arg
                         }
                     },
@@ -209,15 +296,7 @@ private fun expandMacros(code: List<AstNode.Invocation>, macros: List<AstNode.Ma
                 )
             }
         } else {
-            listOf(invoc.copy(
-                args = invoc.args.map { arg ->
-                    if (arg is AstNode.Block) {
-                        arg.copy(body = expandMacros(arg.body, macros))
-                    } else {
-                        arg
-                    }
-                }
-            ))
+            listOf(invoc.copy(args = mappedArgs))
         }
     }
 }

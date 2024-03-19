@@ -10,10 +10,10 @@ import kotlin.io.path.writeText
 
 fun main(args: Array<String>) {
     val file = Path(args[0])
-    val parsed = Parser.parseToEnd(file.readText() + "\n")
-    println(parsed)
+    val text = file.readText() + "\n"
+    val std = ::main.javaClass.getResource("/std.gourmet")!!.readText()
+    val parsed = Parser.parseToEnd(std + "\n" + text)
     val compiled = Compiler(file.nameWithoutExtension, parsed).compile()
-    println(compiled)
     val out = Path("${file.nameWithoutExtension}.chef")
     out.writeText(compiled.toCode())
 }

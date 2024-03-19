@@ -11,7 +11,7 @@ data class ChefProgram(
         val ingredients = ingredients.joinToString("\n") { (amount, name) ->
             "$amount $name"
         }
-        val steps = steps.joinToString(" ") { it.toCode(it) }
+        val steps = steps.joinToString("\n") { it.toCode(it) }
         val functions = functions.joinToString("\n\n") { it.toCode() }
         return """
             $name.

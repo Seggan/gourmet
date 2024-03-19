@@ -56,7 +56,7 @@ sealed class ChefStatement(val toCode: ChefStatement.() -> String) {
 
     data class Div(val reg: Register, val stack: ChefStack) : ChefStatement({ "Divide $reg into $stack." })
 
-    data class Liquefy(val stack: ChefStack) : ChefStatement({ "Liquify contents of the $stack." })
+    data class Liquefy(val stack: ChefStack) : ChefStatement({ "Liquefy contents of the $stack." })
 
     data class Rotate(val stack: ChefStack, val num: Int) : ChefStatement({ "Stir the $stack for $num minutes." })
 
