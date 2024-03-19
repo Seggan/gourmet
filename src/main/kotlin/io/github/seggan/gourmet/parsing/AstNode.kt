@@ -4,7 +4,7 @@ sealed interface AstNode {
 
     sealed interface Expression : AstNode
 
-    data class Number(val value: UInt) : Expression
+    data class Number(val value: Int) : Expression
     data class Register(val name: String) : Expression
     data class Stack(val name: String) : Expression
     data class Variable(val name: String) : Expression
