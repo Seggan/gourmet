@@ -1,31 +1,36 @@
 package io.github.seggan.gourmet.compilation
 
-import io.github.seggan.gourmet.Pool
 import io.github.seggan.gourmet.chef.ChefProgram
 import io.github.seggan.gourmet.chef.ChefStack
 import io.github.seggan.gourmet.chef.ChefStatement
 import io.github.seggan.gourmet.parsing.AstNode
 import java.lang.reflect.InvocationTargetException
 
-/*
-Stack 1: Return stack
-Stack 2: Argument stack
-Stack 3: Main stack
- */
-@Suppress("unused")
+@Suppress("unused", "UNUSED_PARAMETER")
 class Compiler(private val sourceName: String, private val code: List<AstNode>) {
 
-    private val constants = mutableMapOf<Int, String>()
+    private val constants = mutableMapOf<Int, Register>()
     private val allRegisters = mutableListOf<Pair<Int, String>>()
-    private val tempRegisters = Pool(::getNewRegister)
-    private val variables = mutableMapOf<String, String>()
+    private val tempRegisters = ArrayDeque<Register>()
+    private val variables = mutableMapOf<String, Register>()
 
     private var registerIndex = 0
 
     private val instructions = mutableListOf<ChefStatement>()
 
-    private val mainStack = ChefStack(3)
+    private val returnStack = ChefStack(1)
+    private val argumentStack = ChefStack(2)
+    private val printStack = ChefStack(3)
+    private val mainStack = ChefStack(4)
     private var currentStack = mainStack
+        set(value) {
+            if (value.num < 4) {
+                throw IllegalArgumentException("Invalid stack: $value")
+            }
+            field = value
+        }
+
+    private var buffered = 0
 
     fun compile(): ChefProgram {
         val macros = code.filterIsInstance<AstNode.Macro>()
@@ -36,10 +41,16 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
             expanded = expandMacros(expanded, macros)
         } while (expanded != lastExpanded)
         compileBlock(expanded)
+        if (buffered > 0) {
+            throw IllegalStateException("Unflushed print buffer: $buffered")
+        }
+        if (instructions.lastOrNull() is ChefStatement.Clear) {
+            instructions.removeLast()
+        }
         return ChefProgram(sourceName, allRegisters, instructions, listOf())
     }
 
-    private fun getNewRegister(initial: Int = 0): String {
+    private fun getNewRegister(initial: Int = 0, temp: Boolean = false): Register {
         val reg = buildString {
             var i = registerIndex++
             do {
@@ -48,21 +59,29 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
             } while (i > 0)
         }
         allRegisters += initial to reg
-        return reg
+        return if (temp) {
+            Register.Temp(reg, tempRegisters)
+        } else {
+            Register.Variable(reg)
+        }
     }
 
-    private fun getConstant(constant: Int): String {
+    private fun getConstant(constant: Int): Register {
         return constants.computeIfAbsent(constant, ::getNewRegister)
     }
 
-    private fun AstNode.Expression.getRegister(): String {
+    private fun getTempRegister(): Register {
+        return tempRegisters.removeLastOrNull() ?: getNewRegister(temp = true)
+    }
+
+    private fun AstNode.Expression.getRegister(stack: ChefStack): Register {
         return when (this) {
             is AstNode.Number -> getConstant(value)
             is AstNode.Register -> variables.getOrPut(name) { throw IllegalArgumentException("Invalid register: $name") }
             is AstNode.Block -> {
                 compileBlock(body)
-                val reg = getNewRegister()
-                instructions += ChefStatement.Pop(reg, currentStack)
+                val reg = getTempRegister()
+                instructions += ChefStatement.Pop(reg, stack)
                 reg
             }
 
@@ -70,7 +89,20 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
         }
     }
 
-    private fun AstNode.Expression.varToRegister(): String {
+    private fun List<AstNode.Expression>.getRegister(stack: ChefStack): Register {
+        if (size > 1) {
+            throw IllegalArgumentException("Invalid register list: $this")
+        }
+        if (isEmpty()) {
+            val temp = getTempRegister()
+            instructions += ChefStatement.Pop(temp, stack)
+            return temp
+        } else {
+            return get(0).getRegister(stack)
+        }
+    }
+
+    private fun AstNode.Expression.varToRegister(): Register {
         return if (this is AstNode.Register) {
             variables.getOrPut(name) { throw IllegalArgumentException("Invalid register: $name") }
         } else {
@@ -83,9 +115,9 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
             try {
                 Compiler::class.java.getMethod(
                     "i" + insn.name,
+                    ChefStack::class.java,
                     List::class.java
-                ).invoke(this@Compiler, insn.args)
-
+                ).invoke(this@Compiler, insn.stack ?: currentStack, insn.args)
             } catch (e: NoSuchMethodException) {
                 throw IllegalArgumentException("Invalid instruction: ${insn.name}")
             } catch (e: InvocationTargetException) {
@@ -95,21 +127,65 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
     }
 
     //<editor-fold desc="Builtins">
-    fun ipush(args: List<AstNode.Expression>) {
-        instructions += ChefStatement.Push(args[0].getRegister(), currentStack)
-    }
-
-    fun ipop(args: List<AstNode.Expression>) {
-        instructions += ChefStatement.Pop(args[0].varToRegister(), currentStack)
-    }
-
-    fun idef(args: List<AstNode.Expression>) {
+    fun idef(stack: ChefStack, args: List<AstNode.Expression>) {
         val arg = args[0]
         if (arg is AstNode.Register) {
             variables[arg.name] = getNewRegister()
         } else {
             throw IllegalArgumentException("Invalid register: $arg")
         }
+    }
+
+    fun iread(stack: ChefStack, args: List<AstNode.Expression>) {
+        instructions += ChefStatement.ReadNum(args[0].varToRegister())
+    }
+
+    fun ipush(stack: ChefStack, args: List<AstNode.Expression>) {
+        instructions += ChefStatement.Push(args[0].getRegister(stack).also(Register::close), stack)
+    }
+
+    fun ipop(stack: ChefStack, args: List<AstNode.Expression>) {
+        instructions += ChefStatement.Pop(args[0].varToRegister(), stack)
+    }
+
+    fun iadd(stack: ChefStack, args: List<AstNode.Expression>) {
+        instructions += ChefStatement.Add(args[0].getRegister(stack).also(Register::close), stack)
+    }
+
+    fun isub(stack: ChefStack, args: List<AstNode.Expression>) {
+        instructions += ChefStatement.Sub(args[0].getRegister(stack).also(Register::close), stack)
+    }
+
+    fun imul(stack: ChefStack, args: List<AstNode.Expression>) {
+        instructions += ChefStatement.Mul(args[0].getRegister(stack).also(Register::close), stack)
+    }
+
+    fun idiv(stack: ChefStack, args: List<AstNode.Expression>) {
+        instructions += ChefStatement.Div(args[0].getRegister(stack).also(Register::close), stack)
+    }
+
+    fun iprint(stack: ChefStack, args: List<AstNode.Expression>) {
+        if (args.isEmpty()) {
+            instructions += ChefStatement.Push(args.getRegister(stack).also(Register::close), printStack)
+            return
+        }
+        for (arg in args.reversed()) {
+            instructions += ChefStatement.Push(arg.getRegister(stack).also(Register::close), printStack)
+            buffered++
+        }
+    }
+
+    fun iflush(stack: ChefStack, args: List<AstNode.Expression>) {
+        instructions += ChefStatement.Output(printStack)
+        instructions += ChefStatement.Clear(printStack)
+        buffered = 0
+    }
+
+    fun iflushStr(stack: ChefStack, args: List<AstNode.Expression>) {
+        instructions += ChefStatement.Liquefy(printStack)
+        instructions += ChefStatement.Output(printStack)
+        instructions += ChefStatement.Clear(printStack)
+        buffered = 0
     }
     //</editor-fold>
 }

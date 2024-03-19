@@ -1,7 +1,6 @@
 package io.github.seggan.gourmet.chef
 
-@JvmInline
-value class ChefStack(private val num: Int) {
+data class ChefStack(val num: Int) {
 
     init {
         require(num > 0) { "Stack number must be positive" }

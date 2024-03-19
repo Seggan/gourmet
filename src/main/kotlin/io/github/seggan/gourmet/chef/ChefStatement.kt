@@ -1,5 +1,7 @@
 package io.github.seggan.gourmet.chef
 
+import io.github.seggan.gourmet.compilation.Register
+
 /*
 Take ingredient from refrigerator.
 This reads a numeric value from STDIN into the ingredient named, overwriting any previous value.
@@ -40,25 +42,25 @@ This causes execution of the recipe in which it appears to end immediately. If i
  */
 sealed class ChefStatement(val toCode: ChefStatement.() -> String) {
 
-    data class ReadNum(val reg: String) : ChefStatement({ "Take $reg from refrigerator." })
+    data class ReadNum(val reg: Register) : ChefStatement({ "Take $reg from refrigerator." })
 
-    data class Push(val reg: String, val stack: ChefStack) : ChefStatement({ "Put $reg into $stack." })
+    data class Push(val reg: Register, val stack: ChefStack) : ChefStatement({ "Put $reg into $stack." })
 
-    data class Pop(val reg: String, val stack: ChefStack) : ChefStatement({ "Fold $reg into $stack." })
+    data class Pop(val reg: Register, val stack: ChefStack) : ChefStatement({ "Fold $reg into $stack." })
 
-    data class Add(val reg: String, val stack: ChefStack) : ChefStatement({ "Add $reg to $stack." })
+    data class Add(val reg: Register, val stack: ChefStack) : ChefStatement({ "Add $reg to $stack." })
 
-    data class Sub(val reg: String, val stack: ChefStack) : ChefStatement({ "Remove $reg from $stack." })
+    data class Sub(val reg: Register, val stack: ChefStack) : ChefStatement({ "Remove $reg from $stack." })
 
-    data class Mul(val reg: String, val stack: ChefStack) : ChefStatement({ "Combine $reg into $stack." })
+    data class Mul(val reg: Register, val stack: ChefStack) : ChefStatement({ "Combine $reg into $stack." })
 
-    data class Div(val reg: String, val stack: ChefStack) : ChefStatement({ "Divide $reg into $stack." })
+    data class Div(val reg: Register, val stack: ChefStack) : ChefStatement({ "Divide $reg into $stack." })
 
     data class Liquefy(val stack: ChefStack) : ChefStatement({ "Liquify contents of the $stack." })
 
     data class Rotate(val stack: ChefStack, val num: Int) : ChefStatement({ "Stir the $stack for $num minutes." })
 
-    data class RotateByReg(val stack: ChefStack, val reg: String) : ChefStatement({ "Stir $reg into the $stack." })
+    data class RotateByReg(val stack: ChefStack, val reg: Register) : ChefStatement({ "Stir $reg into the $stack." })
 
     data class Randomize(val stack: ChefStack) : ChefStatement({ "Mix the $stack well." })
 
@@ -66,9 +68,9 @@ sealed class ChefStatement(val toCode: ChefStatement.() -> String) {
 
     data class Output(val stack: ChefStack) : ChefStatement({ "Pour contents of the $stack into the baking dish." })
 
-    data class StartLoop(val reg: String) : ChefStatement({ "V the $reg." })
+    data class StartLoop(val reg: Register) : ChefStatement({ "V the $reg." })
 
-    data class EndLoop(val reg: String?) : ChefStatement({
+    data class EndLoop(val reg: Register?) : ChefStatement({
         if (reg != null) "V the $reg until ved."
         else "V until ved."
     })

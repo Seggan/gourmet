@@ -9,11 +9,8 @@ import com.github.h0tk3y.betterParse.parser.Parser
 
 object Parser : Grammar<List<AstNode>>() {
 
-    val POPEN by literalToken("(")
-    val PCLOSE by literalToken(")")
     val BOPEN by literalToken("{")
     val BCLOSE by literalToken("}")
-    val COMMA by literalToken(",")
     val AT by literalToken("@")
     val DOLLAR by literalToken("$")
     val PERIOD by literalToken(".")
@@ -29,6 +26,7 @@ object Parser : Grammar<List<AstNode>>() {
 
     @Suppress("unused")
     val WS by regexToken("\\s+", ignore = true)
+
     @Suppress("unused")
     val COMMENT by regexToken("//.*\\n", ignore = true)
 
@@ -42,16 +40,16 @@ object Parser : Grammar<List<AstNode>>() {
     val expr: Parser<AstNode.Expression> by number or char or register or stack or variable or block
 
     val invocation by optional(stack * -PERIOD) *
-            ID * separatedTerms(expr, COMMA, acceptZero = true) *
+            ID * zeroOrMore(expr) *
             -SEMICOLON map { (stack, name, args) -> AstNode.Invocation(stack, name.text, args) }
 
-    val macro by -MACRO * ID *
-            -POPEN * separatedTerms(ID, COMMA, acceptZero = true) * -PCLOSE *
-            block map { (name, args, body) -> AstNode.Macro(name.text, args.map { it.text }, body.body) }
+    val macro by -MACRO * ID * zeroOrMore(ID) * block map { (name, args, body) ->
+        AstNode.Macro(name.text, args.map { it.text }, body.body)
+    }
 
-    val function by -FUN * ID *
-            -POPEN * separatedTerms(ID, COMMA, acceptZero = true) * -PCLOSE *
-            block map { (name, args, body) -> AstNode.Function(name.text, args.map { it.text }, body.body) }
+    val function by -FUN * ID * zeroOrMore(ID) * block map { (name, args, body) ->
+        AstNode.Function(name.text, args.map { it.text }, body.body)
+    }
 
     override val rootParser by zeroOrMore(macro or function or invocation)
 }
