@@ -25,32 +25,106 @@ macro neg { neg { nop; }; }
 
 macro pow y {
     ifelse y {
-        def $x;
-        clone $x;
+        def $toPow;
+        clone $toPow;
         push y;
         sub 1;
         for {
-            mul $x;
+            mul $toPow;
         };
-        del $x;
+        del $toPow;
     } {
         push 1;
     };
 }
 
+macro sign x {
+    ifelse x {
+        def @tempSign;
+        @tempSign.exec {
+            neg 1;
+            push 1;
+            rot x;
+            pop;
+            def $tempSign;
+            pop $tempSign;
+        };
+        push $tempSign;
+        del $tempSign;
+        undef @tempSign;
+    } {
+        push 0;
+    };
+}
+
+macro eq y {
+    def $tempEq;
+    sub y;
+    clone $tempEq;
+    mul $tempEq; // prevent negative values from causing shenanigans
+    pop $tempEq;
+    not $tempEq;
+    del $tempEq;
+}
+
+macro gt y {
+    def $tempGt;
+    sub y;
+    pop $tempGt;
+    sign $tempGt;
+    del $tempGt;
+    eq 1;
+}
+
+macro lt y {
+    def $tempLt;
+    sub y;
+    pop $tempLt;
+    sign $tempLt;
+    pop $tempLt;
+    neg 1;
+    eq $tempLt;
+    del $tempLt;
+}
+
 macro not bool {
-    def @cond;
-    @cond.exec {
+    def @condNot;
+    @condNot.exec {
         push 1;
         push 0;
         rot bool;
         pop;
-        def $temp;
-        pop $temp;
+        def $tempNot;
+        pop $tempNot;
     };
-    push $temp;
-    undef @cond;
-    del $temp;
+    push $tempNot;
+    undef @condNot;
+    del $tempNot;
+}
+
+macro bool val {
+    def @condBool;
+    @condBool.exec {
+        push 0;
+        push 1;
+        rot val;
+        pop;
+        def $tempBool;
+        pop $tempBool;
+    };
+    push $tempBool;
+    undef @condBool;
+    del $tempBool;
+}
+
+macro and reg { mul reg; }
+
+macro or reg {
+    def $tempOr;
+    add reg;
+    pop $tempOr;
+    bool $tempOr;
+    del $tempOr;
 }
 
 macro if cond block { while cond { exec block; break; }; }
