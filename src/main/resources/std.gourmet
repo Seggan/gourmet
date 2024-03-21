@@ -1,8 +1,12 @@
+macro nop { exec {}; }
+
 macro inc reg {
     push reg;
     add 1;
     pop reg;
 }
+
+macro inc { add 1; }
 
 macro dec reg {
     push reg;
@@ -10,25 +14,48 @@ macro dec reg {
     pop reg;
 }
 
-macro even num {
-    push 1;
+macro dec { sub 1; }
+
+macro neg reg {
     push 0;
-    rot num;
-    pop;
+    sub reg;
 }
 
-macro odd num {
-    push 0;
-    push 1;
-    rot num;
-    pop;
+macro neg { neg { nop; }; }
+
+macro pow y {
+    ifelse y {
+        def $x;
+        clone $x;
+        push y;
+        sub 1;
+        for {
+            mul $x;
+        };
+        del $x;
+    } {
+        push 1;
+    };
+}
+
+macro not bool {
+    def @cond;
+    @cond.exec {
+        push 1;
+        push 0;
+        rot bool;
+        pop;
+        def $temp;
+        pop $temp;
+    };
+    push $temp;
+    undef @cond;
+    del $temp;
 }
 
 macro if cond block { while cond { exec block; break; }; }
 
 macro if block { while { exec block; break; }; }
-
-macro not bool { even bool; }
 
 macro ifelse cond true false {
     if cond true;
@@ -40,4 +67,22 @@ macro copy src dest {
     pop dest;
 }
 
+macro clone reg {
+    pop reg;
+    push reg;
+}
+
+macro dup {
+    def $temp;
+    clone $temp;
+    push $temp;
+    del $temp;
+}
+
 macro pop { pop $null; }
+
+macro def var init {
+    def var;
+    push init;
+    pop var;
+}

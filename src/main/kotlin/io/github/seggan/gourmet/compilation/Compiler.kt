@@ -7,7 +7,7 @@ import io.github.seggan.gourmet.parsing.AstNode
 import java.lang.reflect.InvocationTargetException
 
 @Suppress("unused", "UNUSED_PARAMETER")
-class Compiler(private val sourceName: String, private val code: List<AstNode>) {
+class Compiler(private val sourceName: String, private val code: List<AstNode>, private val debug: Boolean = false) {
 
     private val constants = mutableMapOf<Int, Register>()
     private val allRegisters = mutableListOf<Pair<Int, String>>()
@@ -21,14 +21,9 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
     private val returnStack = ChefStack(1)
     private val argumentStack = ChefStack(2)
     private val printStack = ChefStack(3)
-    private val mainStack = ChefStack(4)
+    private val mainStack = if (code.any { it is AstNode.Function }) ChefStack(4) else returnStack
     private var currentStack = mainStack
-        set(value) {
-            if (value.num < 4) {
-                throw IllegalArgumentException("Invalid stack: $value")
-            }
-            field = value
-        }
+    private val stacks = mutableMapOf<String, ChefStack>()
 
     private var buffered = 0
 
@@ -58,6 +53,9 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
                 i /= REGISTER_VALID_CHARS.length
             } while (i > 0)
         }
+        if (reg in VALID_MEASURES) {
+            return getNewRegister(initial, temp)
+        }
         allRegisters += initial to reg
         return if (temp) {
             Register.Temp(reg, tempRegisters)
@@ -80,7 +78,7 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
 
     private fun AstNode.Expression.getRegister(stack: ChefStack, copy: Boolean = false): Register {
         return when (this) {
-            is AstNode.Number -> if (copy) getConstant(value) else getTempRegister(value)
+            is AstNode.Number -> if (copy) getTempRegister(value) else getConstant(value)
             is AstNode.Register -> {
                 val reg = varToRegister()
                 if (copy) {
@@ -136,7 +134,11 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
                     "i" + insn.name,
                     ChefStack::class.java,
                     List::class.java
-                ).invoke(this@Compiler, insn.stack ?: currentStack, insn.args)
+                ).invoke(
+                    this@Compiler,
+                    insn.stack?.let { stacks[it.name] } ?: currentStack,
+                    insn.args
+                )
             } catch (e: NoSuchMethodException) {
                 throw IllegalArgumentException("Invalid instruction: ${insn.name}")
             } catch (e: InvocationTargetException) {
@@ -147,20 +149,33 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
 
     //<editor-fold desc="Builtins">
     fun idef(stack: ChefStack, args: List<AstNode.Expression>) {
-        val arg = args[0]
-        if (arg is AstNode.Register) {
-            variables[arg.name] = Register.Variable(getTempRegister().name)
-        } else {
-            throw IllegalArgumentException("Invalid register: $arg")
+        when (val arg = args[0]) {
+            is AstNode.Register -> variables[arg.name] = Register.Variable(getTempRegister().name)
+            is AstNode.Stack -> {
+                var idx = 5
+                val used = stacks.values.map { it.num }.toSet()
+                while (idx in used) {
+                    idx++
+                }
+                stacks[arg.name] = ChefStack(idx)
+            }
+            else -> throw IllegalArgumentException("Invalid register: $arg")
         }
     }
 
     fun idel(stack: ChefStack, args: List<AstNode.Expression>) {
-        val arg = args[0]
-        if (arg is AstNode.Register) {
-            variables.remove(arg.name)?.let { tempRegisters += it }
-        } else {
-            throw IllegalArgumentException("Invalid register: $arg")
+        when (val arg = args[0]) {
+            is AstNode.Register -> variables.remove(arg.name)?.let { tempRegisters += it }
+            is AstNode.Stack -> stacks.remove(arg.name)?.let { instructions += ChefStatement.Clear(it) }
+            else -> throw IllegalArgumentException("Invalid register: $arg")
+        }
+    }
+
+    fun iundef(stack: ChefStack, args: List<AstNode.Expression>) {
+        when (val arg = args[0]) {
+            is AstNode.Register -> variables.remove(arg.name)
+            is AstNode.Stack -> stacks.remove(arg.name)
+            else -> throw IllegalArgumentException("Invalid register: $arg")
         }
     }
 
@@ -243,7 +258,7 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
     }
 
     fun iwhile(stack: ChefStack, args: List<AstNode.Expression>) {
-        args.dropLast(1).getRegister(stack, true).use { reg ->
+        args.dropLast(1).getRegister(stack).use { reg ->
             val block = args.last() as? AstNode.Block ?: throw IllegalArgumentException("Invalid block: ${args.last()}")
             instructions += ChefStatement.StartLoop(reg)
             compileBlock(block.body)
@@ -259,7 +274,10 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>) 
     fun iexec(stack: ChefStack, args: List<AstNode.Expression>) {
         val arg = args[0]
         if (arg is AstNode.Block) {
+            val oldCurrent = currentStack
+            currentStack = stack
             compileBlock(arg.body)
+            currentStack = oldCurrent
         } else {
             throw IllegalArgumentException("Invalid block: $arg")
         }
@@ -292,7 +310,7 @@ private fun expandMacros(
                             else -> arg
                         }
                     },
-                    stack = invoc.stack
+                    stack = invocation.stack ?: invoc.stack
                 )
             }
         } else {
@@ -302,3 +320,19 @@ private fun expandMacros(
 }
 
 private const val REGISTER_VALID_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+private val VALID_MEASURES = setOf(
+    "g",
+    "kg",
+    "pinch",
+    "pinches",
+    "ml",
+    "l",
+    "dash",
+    "dashes",
+    "cup",
+    "cups",
+    "teaspoon",
+    "teaspoons",
+    "tablespoon",
+    "tablespoons"
+)
