@@ -12,7 +12,7 @@ import java.math.BigInteger
 class Compiler(private val sourceName: String, private val code: List<AstNode>, private val debug: Boolean = false) {
 
     private val constants = mutableMapOf<BigDecimal, Register>()
-    private val allRegisters = mutableListOf<Pair<Int?, String>>()
+    private val allRegisters = mutableListOf<Pair<BigInteger?, String>>()
     private val tempRegisters = ArrayDeque<Register>()
     private val variables = mutableMapOf<String, Register>()
 
@@ -47,7 +47,7 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
         return ChefProgram(sourceName, allRegisters, instructions, listOf())
     }
 
-    private fun getNewRegister(initial: Int?, temp: Boolean = false): Register {
+    private fun getNewRegister(initial: BigInteger?, temp: Boolean = false): Register {
         val reg = buildString {
             var i = registerIndex++
             do {
@@ -69,7 +69,7 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
     private fun getConstant(constant: BigDecimal): Register {
         return constants.getOrPut(constant) {
             val needsExtra = extraNumberSteps(constant)
-            val reg = getNewRegister(if (needsExtra) null else constant.toInt())
+            val reg = getNewRegister(if (needsExtra) null else constant.toBigIntegerExact())
             if (needsExtra) {
                 instructions += ChefStatement.Pop(reg, currentStack)
             }
@@ -80,7 +80,7 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
     private fun getTempRegister(initial: BigDecimal? = null): Register {
         val needPop = initial != null && extraNumberSteps(initial)
         val reg = tempRegisters.removeLastOrNull() ?: return getNewRegister(
-            if (needPop) null else initial?.toInt(),
+            if (needPop) null else initial?.toBigIntegerExact(),
             temp = true
         )
         if (needPop) {

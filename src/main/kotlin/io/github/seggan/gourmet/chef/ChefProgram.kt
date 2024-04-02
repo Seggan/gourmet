@@ -1,8 +1,10 @@
 package io.github.seggan.gourmet.chef
 
+import java.math.BigInteger
+
 data class ChefProgram(
     val name: String,
-    val ingredients: List<Pair<Int?, String>>,
+    val ingredients: List<Pair<BigInteger?, String>>,
     val steps: List<ChefStatement>,
     val functions: List<ChefProgram>
 ) {
