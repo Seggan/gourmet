@@ -1,10 +1,12 @@
 package io.github.seggan.gourmet.parsing
 
+import java.math.BigDecimal
+
 sealed interface AstNode {
 
     sealed interface Expression : AstNode
 
-    data class Number(val value: Int) : Expression
+    data class Number(val value: BigDecimal) : Expression
     data class Register(val name: String) : Expression
     data class Stack(val name: String) : Expression
     data class Variable(val name: String) : Expression

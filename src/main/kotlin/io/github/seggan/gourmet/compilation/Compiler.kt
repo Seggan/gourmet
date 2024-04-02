@@ -5,12 +5,14 @@ import io.github.seggan.gourmet.chef.ChefStack
 import io.github.seggan.gourmet.chef.ChefStatement
 import io.github.seggan.gourmet.parsing.AstNode
 import java.lang.reflect.InvocationTargetException
+import java.math.BigDecimal
+import java.math.BigInteger
 
 @Suppress("unused", "UNUSED_PARAMETER")
 class Compiler(private val sourceName: String, private val code: List<AstNode>, private val debug: Boolean = false) {
 
-    private val constants = mutableMapOf<Int, Register>()
-    private val allRegisters = mutableListOf<Pair<Int, String>>()
+    private val constants = mutableMapOf<BigDecimal, Register>()
+    private val allRegisters = mutableListOf<Pair<Int?, String>>()
     private val tempRegisters = ArrayDeque<Register>()
     private val variables = mutableMapOf<String, Register>()
 
@@ -45,7 +47,7 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
         return ChefProgram(sourceName, allRegisters, instructions, listOf())
     }
 
-    private fun getNewRegister(initial: Int = 0, temp: Boolean = false): Register {
+    private fun getNewRegister(initial: Int?, temp: Boolean = false): Register {
         val reg = buildString {
             var i = registerIndex++
             do {
@@ -64,16 +66,43 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
         }
     }
 
-    private fun getConstant(constant: Int): Register {
-        return constants.computeIfAbsent(constant, ::getNewRegister)
+    private fun getConstant(constant: BigDecimal): Register {
+        return constants.getOrPut(constant) {
+            val needsExtra = extraNumberSteps(constant)
+            val reg = getNewRegister(if (needsExtra) null else constant.toInt())
+            if (needsExtra) {
+                instructions += ChefStatement.Pop(reg, currentStack)
+            }
+            reg
+        }
     }
 
-    private fun getTempRegister(initial: Int? = null): Register {
-        val existing = tempRegisters.removeLastOrNull()
-        if (existing == null || initial != null) {
-            return getNewRegister(initial = initial ?: 0, temp = true)
+    private fun getTempRegister(initial: BigDecimal? = null): Register {
+        val needPop = initial != null && extraNumberSteps(initial)
+        val reg = tempRegisters.removeLastOrNull() ?: return getNewRegister(
+            if (needPop) null else initial?.toInt(),
+            temp = true
+        )
+        if (needPop) {
+            instructions += ChefStatement.Pop(reg, currentStack)
         }
-        return existing
+        return reg
+    }
+
+    private fun extraNumberSteps(num: BigDecimal): Boolean {
+        if (num.isInteger() && num.signum() >= 0) return false
+        if (num.signum() < 0) {
+            instructions += ChefStatement.Push(getConstant(BigDecimal.ZERO), currentStack)
+            instructions += ChefStatement.Sub(getConstant(num.negate()), currentStack)
+        } else {
+            // Decimal number
+            val neum = num.unscaledValue()
+            val denom = BigInteger.TEN.pow(num.scale())
+            val gcd = neum.gcd(denom)
+            instructions += ChefStatement.Push(getConstant(BigDecimal(neum / gcd)), currentStack)
+            instructions += ChefStatement.Div(getConstant(BigDecimal(denom / gcd)), currentStack)
+        }
+        return true
     }
 
     private fun AstNode.Expression.getRegister(stack: ChefStack, copy: Boolean = false): Register {
@@ -159,6 +188,7 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
                 }
                 stacks[arg.name] = ChefStack(idx)
             }
+
             else -> throw IllegalArgumentException("Invalid register: $arg")
         }
     }
@@ -210,7 +240,7 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
     fun irot(stack: ChefStack, args: List<AstNode.Expression>) {
         val firstArg = args[0]
         if (firstArg is AstNode.Number) {
-            instructions += ChefStatement.Rotate(stack, firstArg.value)
+            instructions += ChefStatement.Rotate(stack, firstArg.value.toInt())
         } else {
             instructions += ChefStatement.RotateByReg(stack, firstArg.getRegister(stack).also(Register::close))
         }
@@ -336,3 +366,5 @@ private val VALID_MEASURES = setOf(
     "tablespoon",
     "tablespoons"
 )
+
+fun BigDecimal.isInteger() = signum() == 0 || scale() <= 0 || stripTrailingZeros().scale() <= 0

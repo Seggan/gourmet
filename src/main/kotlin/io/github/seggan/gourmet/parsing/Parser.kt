@@ -7,6 +7,7 @@ import com.github.h0tk3y.betterParse.lexer.literalToken
 import com.github.h0tk3y.betterParse.lexer.regexToken
 import com.github.h0tk3y.betterParse.parser.Parser
 
+@Suppress("MemberVisibilityCanBePrivate")
 object Parser : Grammar<List<AstNode>>() {
 
     val BOPEN by literalToken("{")
@@ -22,7 +23,7 @@ object Parser : Grammar<List<AstNode>>() {
     val CHAR by regexToken("'.'")
 
     val ID by regexToken("[a-zA-Z_][a-zA-Z0-9_]*")
-    val NUMBER by regexToken("\\d+")
+    val NUMBER by regexToken("""[+-]?\d+(\.\d+)?""")
 
     @Suppress("unused")
     val WS by regexToken("\\s+", ignore = true)
@@ -30,8 +31,8 @@ object Parser : Grammar<List<AstNode>>() {
     @Suppress("unused")
     val COMMENT by regexToken("//.*\\n", ignore = true)
 
-    val number by NUMBER use { AstNode.Number(text.toInt()) }
-    val char by CHAR use { AstNode.Number(text[1].code) }
+    val number by NUMBER use { AstNode.Number(text.toBigDecimal()) }
+    val char by CHAR use { AstNode.Number(text[1].code.toBigDecimal()) }
     val register by -DOLLAR * ID use { AstNode.Register(text) }
     val stack by -AT * ID use { AstNode.Stack(text) }
     val variable by ID use { AstNode.Variable(text) }

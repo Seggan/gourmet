@@ -2,14 +2,14 @@ package io.github.seggan.gourmet.chef
 
 data class ChefProgram(
     val name: String,
-    val ingredients: List<Pair<Int, String>>,
+    val ingredients: List<Pair<Int?, String>>,
     val steps: List<ChefStatement>,
     val functions: List<ChefProgram>
 ) {
 
     fun toCode(): String {
         val ingredients = ingredients.joinToString("\n") { (amount, name) ->
-            "$amount $name"
+            if (amount == null) name else "$amount $name"
         }
         val steps = steps.joinToString("\n") { it.toCode(it) }
         val functions = functions.joinToString("\n\n") { it.toCode() }
