@@ -1,6 +1,6 @@
-package io.github.seggan.gourmet.chef
+package io.github.seggan.recipe.chef
 
-import io.github.seggan.gourmet.compilation.Register
+import io.github.seggan.recipe.compilation.Register
 
 /*
 Take ingredient from refrigerator.

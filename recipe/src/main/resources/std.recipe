@@ -136,6 +136,13 @@ macro ifelse cond true false {
     if { not cond; } false;
 }
 
+macro ifelse true false {
+    def $tempIfElse;
+    pop $tempIfElse;
+    ifelse $tempIfElse true false;
+    del $tempIfElse;
+}
+
 macro copy src dest {
     push src;
     pop dest;

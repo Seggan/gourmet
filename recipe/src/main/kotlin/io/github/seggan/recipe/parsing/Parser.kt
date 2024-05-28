@@ -1,4 +1,4 @@
-package io.github.seggan.gourmet.parsing
+package io.github.seggan.recipe.parsing
 
 import com.github.h0tk3y.betterParse.combinators.*
 import com.github.h0tk3y.betterParse.grammar.Grammar

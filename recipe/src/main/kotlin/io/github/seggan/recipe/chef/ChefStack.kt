@@ -1,4 +1,4 @@
-package io.github.seggan.gourmet.chef
+package io.github.seggan.recipe.chef
 
 data class ChefStack(val num: Int) {
 

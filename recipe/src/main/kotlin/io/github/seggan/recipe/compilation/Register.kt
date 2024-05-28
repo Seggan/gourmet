@@ -1,4 +1,4 @@
-package io.github.seggan.gourmet.compilation
+package io.github.seggan.recipe.compilation
 
 sealed interface Register : AutoCloseable {
     val name: String

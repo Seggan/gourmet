@@ -1,4 +1,4 @@
-package io.github.seggan.gourmet.parsing
+package io.github.seggan.recipe.parsing
 
 import java.math.BigDecimal
 

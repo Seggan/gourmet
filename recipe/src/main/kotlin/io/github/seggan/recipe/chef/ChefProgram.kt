@@ -1,4 +1,4 @@
-package io.github.seggan.gourmet.chef
+package io.github.seggan.recipe.chef
 
 import java.math.BigInteger
 

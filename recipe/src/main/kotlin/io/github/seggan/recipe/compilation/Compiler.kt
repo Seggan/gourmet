@@ -1,9 +1,9 @@
-package io.github.seggan.gourmet.compilation
+package io.github.seggan.recipe.compilation
 
-import io.github.seggan.gourmet.chef.ChefProgram
-import io.github.seggan.gourmet.chef.ChefStack
-import io.github.seggan.gourmet.chef.ChefStatement
-import io.github.seggan.gourmet.parsing.AstNode
+import io.github.seggan.recipe.chef.ChefProgram
+import io.github.seggan.recipe.chef.ChefStack
+import io.github.seggan.recipe.chef.ChefStatement
+import io.github.seggan.recipe.parsing.AstNode
 import java.lang.reflect.InvocationTargetException
 import java.math.BigDecimal
 import java.math.BigInteger
