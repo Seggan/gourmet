@@ -16,3 +16,11 @@ sealed interface AstNode {
     data class Macro(val name: String, val args: List<String>, val body: List<Invocation>) : AstNode
     data class Function(val name: String, val args: List<String>, val body: List<Invocation>) : AstNode
 }
+
+fun AstNode.flatten(): List<AstNode> = when (this) {
+    is AstNode.Block -> body.flatMap(AstNode::flatten)
+    is AstNode.Expression -> listOf(this)
+    is AstNode.Invocation -> listOf(this) + args.flatMap(AstNode::flatten)
+    is AstNode.Macro -> listOf(this) + body.flatMap(AstNode::flatten)
+    is AstNode.Function -> listOf(this) + body.flatMap(AstNode::flatten)
+}

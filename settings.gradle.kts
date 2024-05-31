@@ -3,4 +3,4 @@ plugins {
 }
 rootProject.name = "Gourmet"
 include("recipe")
-
+include("gourmet")

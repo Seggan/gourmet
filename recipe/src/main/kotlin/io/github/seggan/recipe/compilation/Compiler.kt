@@ -4,6 +4,7 @@ import io.github.seggan.recipe.chef.ChefProgram
 import io.github.seggan.recipe.chef.ChefStack
 import io.github.seggan.recipe.chef.ChefStatement
 import io.github.seggan.recipe.parsing.AstNode
+import io.github.seggan.recipe.parsing.flatten
 import java.lang.reflect.InvocationTargetException
 import java.math.BigDecimal
 import java.math.BigInteger
@@ -25,18 +26,39 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
     private val printStack = ChefStack(3)
     private val mainStack = if (code.any { it is AstNode.Function }) ChefStack(4) else returnStack
     private var currentStack = mainStack
-    private val stacks = mutableMapOf<String, ChefStack>()
+    private val stacks = mutableMapOf(
+        "_return" to returnStack,
+        "_args" to argumentStack,
+        "_print" to printStack,
+        "_main" to mainStack
+    )
+
+    private val functionsReturn = mutableMapOf<String, Boolean>()
 
     private var buffered = 0
 
     fun compile(): ChefProgram {
         val macros = code.filterIsInstance<AstNode.Macro>()
+        val functions = code.filterIsInstance<AstNode.Function>().map {
+            val compiler = Compiler(it.name, it.body, debug)
+            compiler.instructions += ChefStatement.Clear(compiler.returnStack)
+            for (arg in it.args.reversed()) {
+                val reg = Register.Variable(compiler.getTempRegister().name)
+                compiler.variables[arg] = reg
+                compiler.instructions += ChefStatement.Pop(reg, argumentStack)
+            }
+            compiler.compile()
+        }
+        for (function in functions) {
+            functionsReturn[function.name] = function.steps.any { it is ChefStatement.Return }
+        }
         var expanded = code.filterIsInstance<AstNode.Invocation>()
         var lastExpanded: List<AstNode.Invocation>
         do {
             lastExpanded = expanded
             expanded = expandMacros(expanded, macros)
         } while (expanded != lastExpanded)
+        functionsReturn[sourceName] = expanded.flatMap(AstNode::flatten).any { it is AstNode.Invocation && it.name == "return"}
         compileBlock(expanded)
         if (buffered > 0) {
             throw IllegalStateException("Unflushed print buffer: $buffered")
@@ -44,7 +66,7 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
         if (instructions.lastOrNull() is ChefStatement.Clear) {
             instructions.removeLast()
         }
-        return ChefProgram(sourceName, allRegisters, instructions, listOf())
+        return ChefProgram(sourceName, allRegisters, instructions, functions)
     }
 
     private fun getNewRegister(initial: BigInteger?, temp: Boolean = false): Register {
@@ -298,6 +320,26 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
 
     fun ibreak(stack: ChefStack, args: List<AstNode.Expression>) {
         instructions += ChefStatement.Break
+    }
+
+    fun icall(stack: ChefStack, args: List<AstNode.Expression>) {
+        val name = (args[0] as? AstNode.Register)?.name ?: throw IllegalArgumentException("Invalid function: ${args[0]}")
+        val doesReturn = functionsReturn[name] ?: throw IllegalArgumentException("Unknown function: $name")
+        for (arg in args.drop(1)) {
+            instructions += ChefStatement.Push(arg.getRegister(stack).also(Register::close), argumentStack)
+        }
+        instructions += ChefStatement.Call(name)
+        if (doesReturn) {
+            getTempRegister().use {
+                instructions += ChefStatement.Pop(it, returnStack)
+                instructions += ChefStatement.Push(it, stack)
+            }
+        }
+    }
+
+    fun ireturn(stack: ChefStack, args: List<AstNode.Expression>) {
+        instructions += ChefStatement.Push(args.getRegister(stack).also(Register::close), returnStack)
+        instructions += ChefStatement.Return
     }
 
     //==========================================
