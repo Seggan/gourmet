@@ -66,6 +66,9 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
         if (instructions.lastOrNull() is ChefStatement.Clear) {
             instructions.removeLast()
         }
+        if (functionsReturn[sourceName] == true) {
+            instructions += ChefStatement.Clear(returnStack)
+        }
         return ChefProgram(sourceName, allRegisters, instructions, functions)
     }
 
