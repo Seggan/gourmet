@@ -19,7 +19,9 @@ fun main(args: Array<String>) {
         compiled.appendLine(compiler.compile())
         functions.addAll(compiler.functions)
     }
-    compiled.appendLine("call \$main;")
+    if (functions.any { "fun main" in it }) {
+        compiled.appendLine("call \$main;")
+    }
     val out = Path("${file.nameWithoutExtension}.recipe")
     out.writeText(text = compiled)
 }

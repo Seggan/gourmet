@@ -3,61 +3,50 @@
 package io.github.seggan.gourmet.parsing
 
 import io.github.seggan.gourmet.compilation.CompilationException
+import io.github.seggan.gourmet.compilation.Type
 import java.math.BigDecimal
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.contract
 
-sealed interface AstNode {
-    data class Number(val value: BigDecimal) : AstNode
-    data class String(val value: kotlin.String) : AstNode
-    data class Boolean(val value: kotlin.Boolean) : AstNode
-    data class Vector(val value: List<AstNode>) : AstNode
-    data class Symbol(val value: kotlin.String) : AstNode
-    data class Application(val fn: kotlin.String, val args: List<AstNode>) : AstNode
+sealed interface AstNode<T> {
+
+    val extra: T
+
+    data class Number<T>(val value: BigDecimal, override val extra: T) : AstNode<T>
+    data class String<T>(val value: kotlin.String, override val extra: T) : AstNode<T>
+    data class Boolean<T>(val value: kotlin.Boolean, override val extra: T) : AstNode<T>
+    data class Array<T>(val value: List<AstNode<T>>, override val extra: T) : AstNode<T>
+    data class Symbol<T>(val value: kotlin.String, override val extra: T) : AstNode<T>
+    data class Application<T>(val fn: kotlin.String, val args: List<AstNode<T>>, override val extra: T) : AstNode<T>
 }
 
-inline fun <reified T : AstNode> AstNode.convertTo(): T {
+inline fun <T, reified N : AstNode<T>> AstNode<T>.convertTo(): N {
     contract {
-        returns() implies (this@convertTo is T)
+        returns() implies (this@convertTo is N)
     }
-    if (this is T) {
+    if (this is N) {
         return this
     } else {
-        throw CompilationException("Expected ${T::class.simpleName}, got $this")
+        throw CompilationException("Expected ${N::class.simpleName}, got $this")
     }
 }
 
-fun AstNode.numberValue(): BigDecimal {
-    contract {
-        returns() implies (this@numberValue is AstNode.Number)
-    }
-    return convertTo<AstNode.Number>().value
+fun <T> AstNode<T>.numberValue(): BigDecimal {
+    return convertTo<T, AstNode.Number<T>>().value
 }
 
-fun AstNode.stringValue(): String {
-    contract {
-        returns() implies (this@stringValue is AstNode.String)
-    }
-    return convertTo<AstNode.String>().value
+fun <T> AstNode<T>.stringValue(): kotlin.String {
+    return convertTo<T, AstNode.String<T>>().value
 }
 
-fun AstNode.booleanValue(): Boolean {
-    contract {
-        returns() implies (this@booleanValue is AstNode.Boolean)
-    }
-    return convertTo<AstNode.Boolean>().value
+fun <T> AstNode<T>.booleanValue(): kotlin.Boolean {
+    return convertTo<T, AstNode.Boolean<T>>().value
 }
 
-fun AstNode.vectorValue(): List<AstNode> {
-    contract {
-        returns() implies (this@vectorValue is AstNode.Vector)
-    }
-    return convertTo<AstNode.Vector>().value
+fun <T> AstNode<T>.arrayValue(): List<AstNode<T>> {
+    return convertTo<T, AstNode.Array<T>>().value
 }
 
-fun AstNode.symbolValue(): String {
-    contract {
-        returns() implies (this@symbolValue is AstNode.Symbol)
-    }
-    return convertTo<AstNode.Symbol>().value
+fun <T> AstNode<T>.symbolValue(): kotlin.String {
+    return convertTo<T, AstNode.Symbol<T>>().value
 }
