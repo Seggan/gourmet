@@ -27,7 +27,7 @@ statement
     ;
 
 declaration
-    : VAR Identifier (((COLON type)? ASSIGN expression) | COLON type) SEMICOLON
+    : LET Identifier (((COLON type)? ASSIGN expression) | COLON type) SEMICOLON
     ;
 
 assignment
@@ -57,7 +57,6 @@ return
 expression
     : primary
     | expression DOT Identifier
-    | expression AS type
     | prefixOp=(NOT | MINUS | STAR) expression
     | expression op=(STAR | SLASH | PERCENT) expression
     | expression op=(PLUS | MINUS) expression
@@ -73,10 +72,13 @@ primary
     | MultilineString
     | Char
     | Boolean
-    | fn=Identifier LPAREN (expression (COMMA expression)*)? RPAREN
+    | fn=Identifier generic LPAREN (expression (COMMA expression)*)? RPAREN
     ;
 
 type
-    : Identifier (LBRACKET generic+=type (COMMA generic+=type)* RBRACKET)?
-    | type STAR
+    : Identifier generic? | type STAR
+    ;
+
+generic
+    : LBRACKET type (COMMA type)* RBRACKET
     ;

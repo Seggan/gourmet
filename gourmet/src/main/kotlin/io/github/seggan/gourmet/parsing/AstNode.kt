@@ -1,6 +1,5 @@
 package io.github.seggan.gourmet.parsing
 
-import io.github.seggan.gourmet.compilation.Type
 import io.github.seggan.gourmet.util.Location
 import java.math.BigDecimal
 
@@ -18,7 +17,7 @@ sealed interface AstNode<T> {
     data class Function<T>(
         val name: String,
         val args: List<Pair<String, TypeName>>,
-        val returnType: TypeName,
+        val returnType: TypeName?,
         val block: Block<T>,
         override val location: Location,
         override val extra: T
@@ -41,6 +40,7 @@ sealed interface AstNode<T> {
     data class Declaration<T>(
         val name: String,
         val type: TypeName?,
+        val value: Expression<T>?,
         override val location: Location,
         override val extra: T
     ) : Statement<T>
@@ -114,6 +114,7 @@ sealed interface AstNode<T> {
 
     data class FunctionCall<T>(
         val name: String,
+        val genericArgs: List<TypeName>,
         val args: List<Expression<T>>,
         override val location: Location,
         override val extra: T
@@ -134,13 +135,6 @@ sealed interface AstNode<T> {
         override val extra: T
     ) : Expression<T>
 
-    data class Cast<T>(
-        val value: Expression<T>,
-        val type: TypeName,
-        override val location: Location,
-        override val extra: T
-    ) : Expression<T>
-
     data class MemberAccess<T>(
         val target: Expression<T>,
         val member: String,
@@ -149,7 +143,23 @@ sealed interface AstNode<T> {
     ) : Expression<T>
 }
 
-typealias UAst = AstNode<Unit>
-typealias UExpression = AstNode.Expression<Unit>
-typealias TAst = AstNode<Type>
-typealias TExpression = AstNode.Expression<Type>
+fun AstNode<*>.stringify(): String = stringify(this)
+
+private fun stringify(value: Any?): String {
+    if (value is List<*>) return value.joinToString(prefix = "[", postfix = "]", separator = ", ", transform = ::stringify)
+    if (value !is AstNode<*>) return value.toString()
+
+    val clazz = value::class.java
+    val name = clazz.simpleName
+    val fields = clazz.declaredFields.filter { it.name != "location" }
+    val sb = StringBuilder("\n")
+    sb.appendLine(name)
+    for (field in fields) {
+        field.isAccessible = true
+        val fieldName = field.name
+        val fieldValue = field.get(value)
+        sb.append("$fieldName: ")
+        sb.appendLine(stringify(fieldValue))
+    }
+    return sb.toString().lines().joinToString("\n") { "  $it" }
+}

@@ -14,13 +14,9 @@ WS
 
 USE: 'use';
 FUN: 'fun';
-
-VAR: 'var';
-AS: 'as';
-
+LET: 'let';
 IF: 'if';
 ELSE: 'else';
-
 DO: 'do';
 WHILE: 'while';
 FOR: 'for';

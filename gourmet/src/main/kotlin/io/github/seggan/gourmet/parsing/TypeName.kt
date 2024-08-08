@@ -17,9 +17,9 @@ sealed interface TypeName {
     companion object {
         fun parse(ctx: GourmetParser.TypeContext): TypeName {
             return if (ctx.STAR() != null) {
-                Pointer(parse(ctx.type().single()))
-            } else if (ctx.generic != null) {
-                Generic(ctx.Identifier().text, ctx.type().map(::parse))
+                Pointer(parse(ctx.type()))
+            } else if (ctx.generic() != null) {
+                Generic(ctx.Identifier().text, ctx.generic().type().map(::parse))
             } else {
                 Simple(ctx.Identifier().text)
             }

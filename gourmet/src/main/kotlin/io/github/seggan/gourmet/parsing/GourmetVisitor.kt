@@ -4,7 +4,7 @@ import io.github.seggan.gourmet.antlr.GourmetParser
 import io.github.seggan.gourmet.antlr.GourmetParserBaseVisitor
 import io.github.seggan.gourmet.util.location
 
-class Parser : GourmetParserBaseVisitor<AstNode<Unit>>() {
+object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
 
     override fun visitFile(ctx: GourmetParser.FileContext): AstNode.File<Unit> {
         return AstNode.File(ctx.function().map(::visitFunction), ctx.location, Unit)
@@ -13,7 +13,7 @@ class Parser : GourmetParserBaseVisitor<AstNode<Unit>>() {
     override fun visitFunction(ctx: GourmetParser.FunctionContext): AstNode.Function<Unit> {
         val name = ctx.Identifier().text
         val args = ctx.parameter().map { it.Identifier().text to TypeName.parse(it.type()) }
-        val returnType = TypeName.parse(ctx.type())
+        val returnType = ctx.type()?.let(TypeName::parse)
         val block = visitBlock(ctx.block())
         return AstNode.Function(name, args, returnType, block, ctx.location, Unit)
     }
@@ -33,17 +33,8 @@ class Parser : GourmetParserBaseVisitor<AstNode<Unit>>() {
     override fun visitDeclaration(ctx: GourmetParser.DeclarationContext): AstNode.Statement<Unit> {
         val name = ctx.Identifier().text
         val type = ctx.type()?.let(TypeName::parse)
-        val decl = AstNode.Declaration(name, type, ctx.location, Unit)
-        return if (ctx.expression() != null) {
-            AstNode.Statements(
-                listOf(
-                    decl,
-                    AstNode.Assignment(name, visitExpression(ctx.expression()), ctx.location, Unit)
-                ), ctx.location, Unit
-            )
-        } else {
-            decl
-        }
+        val expression = ctx.expression()?.let(::visitExpression)
+        return AstNode.Declaration(name, type, expression, ctx.location, Unit)
     }
 
     override fun visitAssignment(ctx: GourmetParser.AssignmentContext): AstNode.Statement<Unit> {
@@ -110,13 +101,6 @@ class Parser : GourmetParserBaseVisitor<AstNode<Unit>>() {
                 Unit
             )
 
-            ctx.AS() != null -> AstNode.Cast(
-                visitExpression(ctx.expression(0)),
-                TypeName.parse(ctx.type()),
-                ctx.location,
-                Unit
-            )
-
             ctx.prefixOp != null -> AstNode.UnaryExpression(
                 UnOp.fromToken(ctx.prefixOp),
                 visitExpression(ctx.expression(0)),
@@ -174,6 +158,7 @@ class Parser : GourmetParserBaseVisitor<AstNode<Unit>>() {
 
             ctx.fn != null -> AstNode.FunctionCall(
                 ctx.fn.text,
+                ctx.generic().type().map(TypeName::parse),
                 ctx.expression().map(::visitExpression),
                 ctx.location,
                 Unit
@@ -183,7 +168,7 @@ class Parser : GourmetParserBaseVisitor<AstNode<Unit>>() {
     }
 }
 
-private fun flattenStatements(node: UAst): List<AstNode.Statement<Unit>> {
+private fun flattenStatements(node: AstNode<Unit>): List<AstNode.Statement<Unit>> {
     return when (node) {
         is AstNode.Statements -> node.statements.flatMap(::flattenStatements)
         is AstNode.Statement -> listOf(node)

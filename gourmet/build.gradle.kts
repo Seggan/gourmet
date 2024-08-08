@@ -44,3 +44,7 @@ tasks.generateGrammarSource {
     )
     outputDirectory = fullPath
 }
+
+tasks.compileKotlin {
+    dependsOn(tasks.generateGrammarSource)
+}

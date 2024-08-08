@@ -1,27 +1,21 @@
 package io.github.seggan.gourmet
 
-import com.github.h0tk3y.betterParse.grammar.parseToEnd
-import io.github.seggan.gourmet.compilation.Compiler
-import io.github.seggan.gourmet.parsing.Parser
+import io.github.seggan.gourmet.antlr.GourmetLexer
+import io.github.seggan.gourmet.antlr.GourmetParser
+import io.github.seggan.gourmet.parsing.GourmetVisitor
+import io.github.seggan.gourmet.parsing.stringify
+import io.github.seggan.gourmet.typing.TypeChecker
+import io.github.seggan.gourmet.util.Location
+import org.antlr.v4.runtime.CharStreams
+import org.antlr.v4.runtime.CommonTokenStream
 import kotlin.io.path.Path
-import kotlin.io.path.nameWithoutExtension
-import kotlin.io.path.readText
-import kotlin.io.path.writeText
 
 fun main(args: Array<String>) {
     val file = Path(args[0])
-    val text = file.readText()
-    val parsed = Parser.parseToEnd(text)
-    val functions = mutableSetOf<String>()
-    val compiled = StringBuilder()
-    for (expr in parsed) {
-        val compiler = Compiler(expr, functions)
-        compiled.appendLine(compiler.compile())
-        functions.addAll(compiler.functions)
-    }
-    if (functions.any { "fun main" in it }) {
-        compiled.appendLine("call \$main;")
-    }
-    val out = Path("${file.nameWithoutExtension}.recipe")
-    out.writeText(text = compiled)
+    val stream = CommonTokenStream(GourmetLexer(CharStreams.fromPath(file)))
+    val parsed = GourmetParser(stream).file()
+    Location.currentFile = file.fileName.toString()
+    val ast = GourmetVisitor.visitFile(parsed)
+    val typedAst = TypeChecker(ast).check()
+    println(typedAst.stringify())
 }

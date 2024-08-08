@@ -1,4 +1,4 @@
-package io.github.seggan.gourmet.compilation
+package io.github.seggan.gourmet.typing
 
 sealed interface Type {
 
@@ -17,14 +17,23 @@ sealed interface Type {
         }
     }
 
-    data object Any : Type {
-        override val tname = "Any"
+    data object Never : Type {
+        override val tname = "Never"
         override val size: Int
-            get() = throw UnsupportedOperationException("Any type has no size")
+            get() = throw UnsupportedOperationException("Never type has no size")
 
         override fun isAssignableTo(other: Type): Boolean {
-            return false
+            return true
         }
+
+        override fun fillGeneric(generic: Type, type: Type): Type {
+            return this
+        }
+    }
+
+    data object Unit : Type {
+        override val tname = "Unit"
+        override val size = 0
 
         override fun fillGeneric(generic: Type, type: Type): Type {
             return this
@@ -64,11 +73,21 @@ sealed interface Type {
         }
     }
 
-    fun isAssignableTo(other: Type): Boolean {
-        return when (other) {
-            this, Any -> true
-            else -> false
+    data class Function(val genericArgs: List<Type>, val args: List<Type>, val returnType: Type) : Type {
+        override val tname = "[${genericArgs.joinToString(", ")}](${args.joinToString(", ")}) -> $returnType"
+        override val size = 1
+
+        override fun fillGeneric(generic: Type, type: Type): Type {
+            return Function(
+                genericArgs.filterNot { it == generic }.map { it.fillGeneric(generic, type) },
+                args.map { it.fillGeneric(generic, type) },
+                returnType.fillGeneric(generic, type)
+            )
         }
+    }
+
+    fun isAssignableTo(other: Type): Boolean {
+        return this == other
     }
 
     fun fillGeneric(generic: Type, type: Type): Type
