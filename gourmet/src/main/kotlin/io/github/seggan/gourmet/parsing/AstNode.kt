@@ -1,52 +1,155 @@
-@file:OptIn(ExperimentalContracts::class)
-
 package io.github.seggan.gourmet.parsing
 
-import io.github.seggan.gourmet.compilation.CompilationException
 import io.github.seggan.gourmet.compilation.Type
+import io.github.seggan.gourmet.util.Location
 import java.math.BigDecimal
-import kotlin.contracts.ExperimentalContracts
-import kotlin.contracts.contract
 
 sealed interface AstNode<T> {
 
     val extra: T
+    val location: Location
 
-    data class Number<T>(val value: BigDecimal, override val extra: T) : AstNode<T>
-    data class String<T>(val value: kotlin.String, override val extra: T) : AstNode<T>
-    data class Boolean<T>(val value: kotlin.Boolean, override val extra: T) : AstNode<T>
-    data class Array<T>(val value: List<AstNode<T>>, override val extra: T) : AstNode<T>
-    data class Symbol<T>(val value: kotlin.String, override val extra: T) : AstNode<T>
-    data class Application<T>(val fn: kotlin.String, val args: List<AstNode<T>>, override val extra: T) : AstNode<T>
+    data class File<T>(
+        val functions: List<Function<T>>,
+        override val location: Location,
+        override val extra: T
+    ) : AstNode<T>
+
+    data class Function<T>(
+        val name: String,
+        val args: List<Pair<String, TypeName>>,
+        val returnType: TypeName,
+        val block: Block<T>,
+        override val location: Location,
+        override val extra: T
+    ) : AstNode<T>
+
+    sealed interface Statement<T> : AstNode<T>
+
+    data class Statements<T>(
+        val statements: List<Statement<T>>,
+        override val location: Location,
+        override val extra: T
+    ) : Statement<T>
+
+    data class Block<T>(
+        val statements: Statements<T>,
+        override val location: Location,
+        override val extra: T
+    ) : Statement<T>
+
+    data class Declaration<T>(
+        val name: String,
+        val type: TypeName?,
+        override val location: Location,
+        override val extra: T
+    ) : Statement<T>
+
+    data class Assignment<T>(
+        val name: String,
+        val value: Expression<T>,
+        override val location: Location,
+        override val extra: T
+    ) : Statement<T>
+
+    data class Return<T>(
+        val value: Expression<T>,
+        override val location: Location,
+        override val extra: T
+    ) : Statement<T>
+
+    data class If<T>(
+        val condition: Expression<T>,
+        val thenBlock: Statement<T>,
+        val elseBlock: Statement<T>?,
+        override val location: Location,
+        override val extra: T
+    ) : Statement<T>
+
+    data class While<T>(
+        val condition: Expression<T>,
+        val block: Statement<T>,
+        override val location: Location,
+        override val extra: T
+    ) : Statement<T>
+
+    data class DoWhile<T>(
+        val block: Statement<T>,
+        val condition: Expression<T>,
+        override val location: Location,
+        override val extra: T
+    ) : Statement<T>
+
+    sealed interface Expression<T> : Statement<T>
+
+    data class NumberLiteral<T>(
+        val value: BigDecimal,
+        override val location: Location,
+        override val extra: T
+    ) : Expression<T>
+
+    data class StringLiteral<T>(
+        val value: String,
+        override val location: Location,
+        override val extra: T
+    ) : Expression<T>
+
+    data class CharLiteral<T>(
+        val value: Char,
+        override val location: Location,
+        override val extra: T
+    ) : Expression<T>
+
+    data class BooleanLiteral<T>(
+        val value: Boolean,
+        override val location: Location,
+        override val extra: T
+    ) : Expression<T>
+
+    data class Variable<T>(
+        val name: String,
+        override val location: Location,
+        override val extra: T
+    ) : Expression<T>
+
+    data class FunctionCall<T>(
+        val name: String,
+        val args: List<Expression<T>>,
+        override val location: Location,
+        override val extra: T
+    ) : Expression<T>
+
+    data class BinaryExpression<T>(
+        val left: Expression<T>,
+        val operator: BinOp,
+        val right: Expression<T>,
+        override val location: Location,
+        override val extra: T
+    ) : Expression<T>
+
+    data class UnaryExpression<T>(
+        val operator: UnOp,
+        val value: Expression<T>,
+        override val location: Location,
+        override val extra: T
+    ) : Expression<T>
+
+    data class Cast<T>(
+        val value: Expression<T>,
+        val type: TypeName,
+        override val location: Location,
+        override val extra: T
+    ) : Expression<T>
+
+    data class MemberAccess<T>(
+        val target: Expression<T>,
+        val member: String,
+        override val location: Location,
+        override val extra: T
+    ) : Expression<T>
 }
 
-inline fun <T, reified N : AstNode<T>> AstNode<T>.convertTo(): N {
-    contract {
-        returns() implies (this@convertTo is N)
-    }
-    if (this is N) {
-        return this
-    } else {
-        throw CompilationException("Expected ${N::class.simpleName}, got $this")
-    }
-}
-
-fun <T> AstNode<T>.numberValue(): BigDecimal {
-    return convertTo<T, AstNode.Number<T>>().value
-}
-
-fun <T> AstNode<T>.stringValue(): kotlin.String {
-    return convertTo<T, AstNode.String<T>>().value
-}
-
-fun <T> AstNode<T>.booleanValue(): kotlin.Boolean {
-    return convertTo<T, AstNode.Boolean<T>>().value
-}
-
-fun <T> AstNode<T>.arrayValue(): List<AstNode<T>> {
-    return convertTo<T, AstNode.Array<T>>().value
-}
-
-fun <T> AstNode<T>.symbolValue(): kotlin.String {
-    return convertTo<T, AstNode.Symbol<T>>().value
-}
+typealias UAst = AstNode<Unit>
+typealias UExpression = AstNode.Expression<Unit>
+typealias TAst = AstNode<Type>
+typealias TExpression = AstNode.Expression<Type>

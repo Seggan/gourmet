@@ -43,3 +43,4 @@ bin/
 
 .idea
 test.*
+*.tokens

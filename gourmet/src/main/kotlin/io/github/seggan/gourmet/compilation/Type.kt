@@ -47,22 +47,6 @@ sealed interface Type {
         }
     }
 
-    data class Array(val type: Type, val length: Int) : Type {
-        override val tname = "${type.tname}[$length]"
-        override val size = type.size * length
-
-        override fun isAssignableTo(other: Type): Boolean {
-            return when (other) {
-                is Array -> type.isAssignableTo(other.type)
-                else -> false
-            }
-        }
-
-        override fun fillGeneric(generic: Type, type: Type): Type {
-            return Array(type.fillGeneric(generic, type), length)
-        }
-    }
-
     data class Structure(override val tname: String, val fields: List<Pair<String, Type>>) : Type {
         override val size = fields.sumOf { it.second.size }
 
@@ -90,23 +74,6 @@ sealed interface Type {
     fun fillGeneric(generic: Type, type: Type): Type
 
     companion object {
-        fun parse(tname: String, declaredTypes: Set<Type>): Type? {
-            return when {
-                tname.endsWith('*') -> Pointer(parse(tname.dropLast(1), declaredTypes) ?: return null)
-                tname.endsWith(']') -> {
-                    val type = tname.substringBeforeLast('[', "")
-                    if (type.isEmpty()) return null
-                    val length = tname.substringAfterLast('[').dropLast(1)
-                    Array(parse(type, declaredTypes) ?: return null, length.toInt())
-                }
-
-                tname == "Number" -> Primitive.NUMBER
-                tname == "Boolean" -> Primitive.BOOLEAN
-                declaredTypes.any { it.tname == tname } -> declaredTypes.first { it.tname == tname }
-                else -> null
-            }
-        }
-
         val STRING = Structure("String", listOf("length" to Primitive.NUMBER, "data" to Pointer(Primitive.CHAR)))
     }
 }

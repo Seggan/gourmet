@@ -47,7 +47,7 @@ class Compiler(
         when (node) {
             is AstNode.Application -> builtins[node.fn]!!(node.args)
             is AstNode.Boolean -> code(if (node.value) "push 1" else "push 0")
-            is AstNode.Number -> code("push ${node.value.stripTrailingZeros().toPlainString()}")
+            is AstNode.NumberLiteral -> code("push ${node.value.stripTrailingZeros().toPlainString()}")
             is AstNode.String -> TODO()
             is AstNode.Symbol -> TODO()
             is AstNode.Array -> TODO()

@@ -28,7 +28,7 @@ class TypeChecker(private val ast: AstNode<Unit>) {
                 AstNode.Application(fn, args, fnType.ret)
             }
             is AstNode.Boolean -> AstNode.Boolean(node.value, Type.Primitive.BOOLEAN)
-            is AstNode.Number -> AstNode.Number(node.value, Type.Primitive.NUMBER)
+            is AstNode.NumberLiteral -> AstNode.NumberLiteral(node.value, Type.Primitive.NUMBER)
             is AstNode.String -> AstNode.String(node.value, Type.String)
             is AstNode.Symbol -> AstNode.Symbol(node.value, Type.Unknown)
             is AstNode.Array -> {
