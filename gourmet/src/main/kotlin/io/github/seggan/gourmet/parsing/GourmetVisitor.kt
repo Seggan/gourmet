@@ -44,7 +44,7 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
     }
 
     override fun visitReturn(ctx: GourmetParser.ReturnContext): AstNode.Statement<Unit> {
-        val value = visitExpression(ctx.expression())
+        val value = ctx.expression()?.let(::visitExpression)
         return AstNode.Return(value, ctx.location, Unit)
     }
 

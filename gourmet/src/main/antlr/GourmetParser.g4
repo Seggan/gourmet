@@ -51,7 +51,7 @@ for
     ;
 
 return
-    : RETURN expression SEMICOLON
+    : RETURN expression? SEMICOLON
     ;
 
 expression

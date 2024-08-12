@@ -18,7 +18,7 @@ sealed interface AstNode<T> {
         val name: String,
         val args: List<Pair<String, TypeName>>,
         val returnType: TypeName?,
-        val block: Block<T>,
+        val body: Block<T>,
         override val location: Location,
         override val extra: T
     ) : AstNode<T>
@@ -53,28 +53,28 @@ sealed interface AstNode<T> {
     ) : Statement<T>
 
     data class Return<T>(
-        val value: Expression<T>,
+        val value: Expression<T>?,
         override val location: Location,
         override val extra: T
     ) : Statement<T>
 
     data class If<T>(
         val condition: Expression<T>,
-        val thenBlock: Statement<T>,
-        val elseBlock: Statement<T>?,
+        val thenBody: Statement<T>,
+        val elseBody: Statement<T>?,
         override val location: Location,
         override val extra: T
     ) : Statement<T>
 
     data class While<T>(
         val condition: Expression<T>,
-        val block: Statement<T>,
+        val body: Statement<T>,
         override val location: Location,
         override val extra: T
     ) : Statement<T>
 
     data class DoWhile<T>(
-        val block: Statement<T>,
+        val body: Statement<T>,
         val condition: Expression<T>,
         override val location: Location,
         override val extra: T

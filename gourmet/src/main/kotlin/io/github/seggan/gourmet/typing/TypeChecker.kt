@@ -45,7 +45,7 @@ class TypeChecker(private val ast: AstNode.File<Unit>) {
         val returnType = node.returnType?.resolve(node.location) ?: Type.Unit
         val signature = Type.Function(emptyList(), args.map { it.second }, returnType)
         functions.add(node.name to signature)
-        val block = checkBlock(node.block)
+        val block = checkBlock(node.body)
         scopes.removeFirst()
         return AstNode.Function(node.name, node.args, node.returnType, block, node.location, signature)
     }
@@ -96,10 +96,14 @@ class TypeChecker(private val ast: AstNode.File<Unit>) {
     }
 
     private fun checkReturn(node: AstNode.Return<Unit>): AstNode.Return<Type> {
-        val value = checkExpression(node.value)
+        val value = node.value?.let(::checkExpression)
+        val valueType = value?.extra ?: Type.Unit
         val returnType = functions.last().second.returnType
-        if (!value.extra.isAssignableTo(returnType)) {
-            throw TypeException("Cannot return ${value.extra} from function with return type $returnType", node.location)
+        if (!valueType.isAssignableTo(returnType)) {
+            throw TypeException(
+                "Cannot return $valueType from function with return type $returnType",
+                node.location
+            )
         }
         return AstNode.Return(value, node.location, returnType)
     }
@@ -109,8 +113,8 @@ class TypeChecker(private val ast: AstNode.File<Unit>) {
         if (condition.extra != Type.Primitive.BOOLEAN) {
             throw TypeException("Condition must be a boolean", condition.location)
         }
-        val thenBlock = checkStatement(node.thenBlock)
-        val elseBlock = node.elseBlock?.let(::checkStatement)
+        val thenBlock = checkStatement(node.thenBody)
+        val elseBlock = node.elseBody?.let(::checkStatement)
         return AstNode.If(condition, thenBlock, elseBlock, node.location, Type.Unit)
     }
 
@@ -119,12 +123,12 @@ class TypeChecker(private val ast: AstNode.File<Unit>) {
         if (condition.extra != Type.Primitive.BOOLEAN) {
             throw TypeException("Condition must be a boolean", condition.location)
         }
-        val block = checkStatement(node.block)
+        val block = checkStatement(node.body)
         return AstNode.While(condition, block, node.location, Type.Unit)
     }
 
     private fun checkDoWhile(node: AstNode.DoWhile<Unit>): AstNode.DoWhile<Type> {
-        val block = checkStatement(node.block)
+        val block = checkStatement(node.body)
         val condition = checkExpression(node.condition)
         if (condition.extra != Type.Primitive.BOOLEAN) {
             throw TypeException("Condition must be a boolean", condition.location)
@@ -160,27 +164,38 @@ class TypeChecker(private val ast: AstNode.File<Unit>) {
     }
 
     private fun checkFunctionCall(node: AstNode.FunctionCall<Unit>): AstNode.FunctionCall<Type> {
-        var function = functions.firstOrNull { it.first == node.name }?.second
-            ?: throw TypeException("Unknown function: ${node.name}", node.location)
-        if (node.genericArgs.size != function.genericArgs.size) {
-            throw TypeException("Expected ${function.genericArgs.size} generic arguments, got ${node.genericArgs.size}", node.location)
-        }
-        if (node.args.size != function.args.size) {
-            throw TypeException("Expected ${function.args.size} arguments, got ${node.args.size}", node.location)
-        }
-        for ((generic, provided) in function.genericArgs.zip(node.genericArgs)) {
-            function = function.fillGeneric(generic, provided.resolve(node.location)) as Type.Function
-        }
-        if (function.genericArgs.isNotEmpty()) {
-            throw TypeException("Generic arguments not fully resolved", node.location)
-        }
-        val args = node.args.map(::checkExpression)
-        for ((arg, provided) in function.args.zip(args)) {
-            if (!provided.extra.isAssignableTo(arg)) {
-                throw TypeException("Cannot assign ${provided.extra} to $arg", provided.location)
+        var exception = TypeException("Unknown function: ${node.name}", node.location)
+        outer@ for (function in functions) {
+            if (function.first != node.name) continue
+            var type = function.second
+            if (node.genericArgs.size != type.genericArgs.size) {
+                exception = TypeException(
+                    "Expected ${type.genericArgs.size} generic arguments, got ${node.genericArgs.size}",
+                    node.location
+                )
+                continue
             }
+            if (node.args.size != type.args.size) {
+                exception = TypeException("Expected ${type.args.size} arguments, got ${node.args.size}", node.location)
+                continue
+            }
+            for ((generic, provided) in type.genericArgs.zip(node.genericArgs)) {
+                type = type.fillGeneric(generic, provided.resolve(node.location)) as Type.Function
+            }
+            if (type.genericArgs.isNotEmpty()) {
+                exception = TypeException("Generic arguments not fully resolved", node.location)
+                continue
+            }
+            val args = node.args.map(::checkExpression)
+            for ((arg, provided) in type.args.zip(args)) {
+                if (!provided.extra.isAssignableTo(arg)) {
+                    exception = TypeException("Cannot assign ${provided.extra} to $arg", provided.location)
+                    continue@outer
+                }
+            }
+            return AstNode.FunctionCall(node.name, node.genericArgs, args, node.location, type.returnType)
         }
-        return AstNode.FunctionCall(node.name, node.genericArgs, args, node.location, function.returnType)
+        throw exception
     }
 
     private fun checkMemberAccess(node: AstNode.MemberAccess<Unit>): AstNode.MemberAccess<Type> {
