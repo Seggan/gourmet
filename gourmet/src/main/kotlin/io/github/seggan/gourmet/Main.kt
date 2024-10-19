@@ -22,7 +22,7 @@ fun main(args: Array<String>) {
     val typedAst = TypeChecker.check(ast)
     println(typedAst.stringify())
     val compiled = IrCompiler.compile(typedAst)
-    val dot = compiled.functions.values.first().toGraph()
+    val dot = compiled.first().toGraph()
     Path("graph.dot").writeText(dot)
     Runtime.getRuntime().exec("dot -Tpng graph.dot -o graph.png")
 }

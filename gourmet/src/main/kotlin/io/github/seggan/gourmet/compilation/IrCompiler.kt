@@ -12,11 +12,11 @@ class IrCompiler private constructor(private val ast: AstNode.File<TypeData>) {
     private var declaredVariables = ArrayDeque<MutableSet<Variable>>()
     private var outsideVariables = ArrayDeque<MutableSet<Variable>>()
 
-    private fun compile(): CompiledBlocks {
-        return CompiledBlocks(ast.functions.associate(::compileFunction))
+    private fun compile(): List<CompiledFunction> {
+        return ast.functions.map(::compileFunction)
     }
 
-    private fun compileFunction(function: AstNode.Function<TypeData>): Pair<Type.Function, BasicBlock> {
+    private fun compileFunction(function: AstNode.Function<TypeData>): CompiledFunction {
         val ftype = function.realType as Type.Function
         val scope = Scope()
         scopes.addFirst(scope)
@@ -31,7 +31,7 @@ class IrCompiler private constructor(private val ast: AstNode.File<TypeData>) {
         }
         val body = compileBlock(function.body, false)
         head then body
-        return ftype to head.first
+        return CompiledFunction(function.name, ftype, head.first)
     }
 
     private fun compileBlock(block: AstNode.Block<TypeData>, newScope: Boolean = true): Blocks {
@@ -55,39 +55,45 @@ class IrCompiler private constructor(private val ast: AstNode.File<TypeData>) {
             is AstNode.Declaration -> compileDeclaration(statement)
             is AstNode.DoWhile -> TODO()
             is AstNode.If -> TODO()
-            is AstNode.Return -> TODO()
+            is AstNode.Return -> compileReturn(statement)
             is AstNode.Statements -> compileStatements(statement)
             is AstNode.While -> TODO()
         }
     }
 
-    private fun compileAssignment(assignment: AstNode.Assignment<TypeData>) = buildBlock {
-        val variable = getVariable(assignment.name)
-            ?: throw CompilationException("Variable not found: ${assignment.name}")
-        +compileExpression(assignment.value)
+    private fun compileAssignment(node: AstNode.Assignment<TypeData>) = buildBlock {
+        val variable = getVariable(node.name)
+            ?: throw CompilationException("Variable not found: ${node.name}")
+        +compileExpression(node.value)
         +variable.pop()
     }
 
-    private fun compileDeclaration(declaration: AstNode.Declaration<TypeData>) = buildBlock {
-        if (getVariable(declaration.name) != null) {
-            throw CompilationException("Variable already declared: ${declaration.name}")
+    private fun compileDeclaration(node: AstNode.Declaration<TypeData>) = buildBlock {
+        if (getVariable(node.name) != null) {
+            throw CompilationException("Variable already declared: ${node.name}")
         }
-        val variable = Variable.generate(declaration.name, declaration.realType)
+        val variable = Variable.generate(node.name, node.realType)
         scopes.first().add(variable)
         declaredVariables.first().add(variable)
-        if (declaration.value != null) {
-            +compileExpression(declaration.value)
+        if (node.value != null) {
+            +compileExpression(node.value)
             +variable.pop()
         }
     }
 
-    private fun compileDoWhile(doWhile: AstNode.DoWhile<TypeData>): Blocks {
-        TODO()
+    private fun compileReturn(node: AstNode.Return<TypeData>): Blocks {
+        val block = buildBlock { /* TODO */ }
+        block.second.continuation = Continuation.Return
+        return block
     }
 
     private fun compileExpression(expression: AstNode.Expression<TypeData>): Blocks {
         return when (expression) {
-            is AstNode.BinaryExpression -> TODO()
+            is AstNode.BinaryExpression -> buildBlock {
+                +compileExpression(expression.left)
+                +compileExpression(expression.right)
+                +expression.operator.compile()
+            }
             is AstNode.BooleanLiteral -> TODO()
             is AstNode.CharLiteral -> TODO()
             is AstNode.FunctionCall -> TODO()
@@ -127,7 +133,7 @@ class IrCompiler private constructor(private val ast: AstNode.File<TypeData>) {
     }
 
     companion object {
-        fun compile(ast: AstNode.File<TypeData>): CompiledBlocks {
+        fun compile(ast: AstNode.File<TypeData>): List<CompiledFunction> {
             return IrCompiler(ast).compile()
         }
     }

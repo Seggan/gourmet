@@ -14,7 +14,11 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
         val name = ctx.Identifier().text
         val args = ctx.parameter().map { it.Identifier().text to TypeName.parse(it.type()) }
         val returnType = ctx.type()?.let(TypeName::parse)
-        val block = visitBlock(ctx.block())
+        var block = visitBlock(ctx.block())
+        if (block.statements.lastOrNull() !is AstNode.Return) {
+            val newStatements = block.statements + AstNode.Return(null, ctx.location, Unit)
+            block = block.copy(statements = block.statements.copy(statements = newStatements))
+        }
         return AstNode.Function(name, args, returnType, block, ctx.location, Unit)
     }
 

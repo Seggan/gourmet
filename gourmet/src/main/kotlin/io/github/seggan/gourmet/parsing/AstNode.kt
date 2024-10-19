@@ -29,7 +29,7 @@ sealed interface AstNode<T> {
         val statements: List<Statement<T>>,
         override val location: Location,
         override val extra: T
-    ) : Statement<T>
+    ) : Statement<T>, List<Statement<T>> by statements
 
     data class Block<T>(
         val statements: Statements<T>,
