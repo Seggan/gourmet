@@ -1,5 +1,7 @@
 package io.github.seggan.gourmet.typing
 
+import io.github.seggan.gourmet.parsing.AstNode
+
 sealed interface Type {
 
     val tname: String
@@ -96,3 +98,6 @@ sealed interface Type {
         val STRING = Structure("String", listOf("length" to Primitive.NUMBER, "data" to Pointer(Primitive.CHAR)))
     }
 }
+
+val AstNode<TypeData>.realType: Type
+    get() = extra.type

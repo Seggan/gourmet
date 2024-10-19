@@ -19,7 +19,7 @@ fun main(args: Array<String>) {
     val parsed = GourmetParser(stream).file()
     Location.currentFile = file.fileName.toString()
     val ast = GourmetVisitor.visitFile(parsed)
-    val typedAst = TypeChecker(ast).check()
+    val typedAst = TypeChecker.check(ast)
     println(typedAst.stringify())
     val compiled = Compiler(typedAst).compile()
     Path("${file.nameWithoutExtension}.recipe").writeText(compiled)
