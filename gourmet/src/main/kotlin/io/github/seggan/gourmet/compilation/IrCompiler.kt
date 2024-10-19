@@ -12,11 +12,8 @@ class IrCompiler private constructor(private val ast: AstNode.File<TypeData>) {
     private var declaredVariables = ArrayDeque<MutableSet<Variable>>()
     private var outsideVariables = ArrayDeque<MutableSet<Variable>>()
 
-    private val functionMap = mutableMapOf<Type.Function, BasicBlock>()
-
     private fun compile(): CompiledBlocks {
-        ast.functions.forEach(::compileFunction)
-        return CompiledBlocks(functionMap)
+        return CompiledBlocks(ast.functions.associate(::compileFunction))
     }
 
     private fun compileFunction(function: AstNode.Function<TypeData>): Pair<Type.Function, BasicBlock> {
@@ -89,7 +86,17 @@ class IrCompiler private constructor(private val ast: AstNode.File<TypeData>) {
     }
 
     private fun compileExpression(expression: AstNode.Expression<TypeData>): Blocks {
-        TODO()
+        return when (expression) {
+            is AstNode.BinaryExpression -> TODO()
+            is AstNode.BooleanLiteral -> TODO()
+            is AstNode.CharLiteral -> TODO()
+            is AstNode.FunctionCall -> TODO()
+            is AstNode.MemberAccess -> TODO()
+            is AstNode.NumberLiteral -> buildBlock { +Instruction("push", Argument.Number(expression.value)) }
+            is AstNode.StringLiteral -> TODO()
+            is AstNode.UnaryExpression -> TODO()
+            is AstNode.Variable -> TODO()
+        }
     }
 
     private fun getVariable(name: String): Variable? {
@@ -155,6 +162,8 @@ class IrCompiler private constructor(private val ast: AstNode.File<TypeData>) {
                 mutableSetOf(),
                 outsideVariables.removeFirst()
             )
+            declaredVariables.addFirst(mutableSetOf())
+            outsideVariables.addFirst(mutableSetOf())
             blocks = if (::blocks.isInitialized) {
                 blocks then block
             } else {
@@ -165,6 +174,8 @@ class IrCompiler private constructor(private val ast: AstNode.File<TypeData>) {
 
         fun build(): Blocks {
             popBlock()
+            declaredVariables.removeFirst()
+            outsideVariables.removeFirst()
             return blocks
         }
     }
@@ -177,7 +188,7 @@ class IrCompiler private constructor(private val ast: AstNode.File<TypeData>) {
 private typealias Blocks = Pair<BasicBlock, BasicBlock>
 
 private infix fun Blocks.then(block: BasicBlock): Blocks {
-    if (second.continuation != null) {
+    if (second.continuation == null) {
         second.continuation = Continuation.Direct(block)
         return first to block
     } else {
@@ -186,10 +197,12 @@ private infix fun Blocks.then(block: BasicBlock): Blocks {
 }
 
 private infix fun Blocks.then(blocks: Blocks): Blocks {
-    if (second.continuation != null) {
+    if (second.continuation == null) {
         second.continuation = Continuation.Direct(blocks.first)
         return first to blocks.second
     } else {
         return this
     }
 }
+
+class CompilationException(message: String) : Exception(message)

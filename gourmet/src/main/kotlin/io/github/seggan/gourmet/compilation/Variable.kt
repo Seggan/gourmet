@@ -1,8 +1,7 @@
 package io.github.seggan.gourmet.compilation
 
-import io.github.seggan.gourmet.compilation.ir.Argument
-import io.github.seggan.gourmet.compilation.ir.Instruction
 import io.github.seggan.gourmet.typing.Type
+import io.github.seggan.gourmet.util.randomString
 
 data class Variable(val name: String, val type: Type, val mapped: List<String>) {
     val size by mapped::size

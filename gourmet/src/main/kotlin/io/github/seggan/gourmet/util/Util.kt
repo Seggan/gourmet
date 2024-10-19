@@ -1,3 +1,6 @@
 package io.github.seggan.gourmet.util
 
-fun <T> T.singleton(): List<T> = listOf(this)
+import kotlin.random.Random
+import kotlin.random.nextULong
+
+fun randomString() = "t${Random.nextULong().toString(16)}"

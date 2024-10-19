@@ -44,3 +44,5 @@ bin/
 .idea
 test.*
 *.tokens
+graph.dot
+graph.png
