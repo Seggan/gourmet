@@ -11,4 +11,17 @@ data class BasicBlock(
     var continuation: Continuation? = null
 ) {
     val id = randomString()
+
+    fun putChildren(children: MutableList<BasicBlock>) {
+        if (children.any { it.id == id }) return
+        children.add(this)
+        when (val cont = continuation) {
+            is Continuation.Direct -> cont.block.putChildren(children)
+            is Continuation.Conditional -> {
+                cont.then.putChildren(children)
+                cont.otherwise.putChildren(children)
+            }
+            else -> return
+        }
+    }
 }

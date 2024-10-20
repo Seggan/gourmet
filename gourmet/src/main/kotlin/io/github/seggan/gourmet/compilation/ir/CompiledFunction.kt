@@ -6,7 +6,7 @@ data class CompiledFunction(val name: String, val type: Type.Function, val body:
 
 fun CompiledFunction.toGraph(): String {
     val children = mutableListOf<BasicBlock>()
-    body.children(children)
+    body.putChildren(children)
     val nodes = mutableSetOf<String>()
     val edges = mutableSetOf<String>()
     for (block in children) {
@@ -50,6 +50,7 @@ fun CompiledFunction.toGraph(): String {
 
     return buildString {
         appendLine("digraph $name {")
+        appendLine("rankdir=LR;")
         appendLine("""$name [label="$name ${type.tname}", shape=box];""")
         appendLine("""return [shape=plaintext];""")
         for (node in nodes) {
@@ -60,18 +61,5 @@ fun CompiledFunction.toGraph(): String {
             appendLine(edge)
         }
         appendLine("}")
-    }
-}
-
-private fun BasicBlock.children(children: MutableList<BasicBlock>) {
-    if (children.any { it.id == id }) return
-    children.add(this)
-    when (val cont = continuation) {
-        is Continuation.Direct -> cont.block.children(children)
-        is Continuation.Conditional -> {
-            cont.then.children(children)
-            cont.otherwise.children(children)
-        }
-        else -> return
     }
 }
