@@ -2,7 +2,12 @@ package io.github.seggan.gourmet.compilation.ir
 
 import io.github.seggan.gourmet.typing.Type
 
-data class CompiledFunction(val name: String, val type: Type.Function, val body: BasicBlock)
+data class CompiledFunction(
+    val attributes: Set<String>,
+    val name: String,
+    val type: Type.Function,
+    val body: BasicBlock
+)
 
 fun CompiledFunction.toGraph(): String {
     val children = mutableListOf<BasicBlock>()
@@ -13,7 +18,6 @@ fun CompiledFunction.toGraph(): String {
         val insns = block.insns.joinToString("\\n") { it.toIr().trimEnd() }
         val declared = block.declaredVariables.joinToString(", ") { it.name }
         val dropped = block.droppedVariables.joinToString(", ") { it.name }
-        val outside = block.outsideVariables.joinToString(", ") { it.name }
         val node = StringBuilder()
         node.append("${block.id} [label=\"")
         var newline = false
@@ -28,12 +32,7 @@ fun CompiledFunction.toGraph(): String {
         }
         if (dropped.isNotEmpty()) {
             if (newline) node.append("\\n")
-            newline = true
             node.append("Dropped: $dropped")
-        }
-        if (outside.isNotEmpty()) {
-            if (newline) node.append("\\n")
-            node.append("Outside: $outside")
         }
         node.append("\"];")
         nodes.add(node.toString())
@@ -43,6 +42,7 @@ fun CompiledFunction.toGraph(): String {
                 edges.add("${block.id} -> ${cont.then.id} [label=\"true\"];")
                 edges.add("${block.id} -> ${cont.otherwise.id} [label=\"false\"];")
             }
+
             is Continuation.Return -> edges.add("${block.id} -> return;")
             null -> {}
         }

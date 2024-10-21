@@ -17,7 +17,6 @@ class BlockOptimizer private constructor(private val head: BasicBlock) {
                         insns = insns + cont.block.insns,
                         declaredVariables = declaredVariables + cont.block.declaredVariables,
                         droppedVariables = droppedVariables + cont.block.droppedVariables,
-                        outsideVariables = outsideVariables + cont.block.outsideVariables,
                         continuation = cont.block.continuation
                     )
                     movePredecessorsTo(newBlock).optimizeBlock()

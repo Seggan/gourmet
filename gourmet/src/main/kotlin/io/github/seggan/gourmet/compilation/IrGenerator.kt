@@ -1,6 +1,9 @@
 package io.github.seggan.gourmet.compilation
 
-import io.github.seggan.gourmet.compilation.ir.*
+import io.github.seggan.gourmet.compilation.ir.BasicBlock
+import io.github.seggan.gourmet.compilation.ir.CompiledFunction
+import io.github.seggan.gourmet.compilation.ir.Continuation
+import io.github.seggan.gourmet.compilation.ir.Insn
 import io.github.seggan.gourmet.parsing.AstNode
 import io.github.seggan.gourmet.typing.Type
 import io.github.seggan.gourmet.typing.TypeData
@@ -10,7 +13,6 @@ class IrGenerator private constructor() {
 
     private val scopes = ArrayDeque<Scope>()
     private var declaredVariables = ArrayDeque<MutableSet<Variable>>()
-    private var outsideVariables = ArrayDeque<MutableSet<Variable>>()
 
     private fun compile(ast: AstNode.File<TypeData>): List<CompiledFunction> {
         return ast.functions.map(::compileFunction)
@@ -31,14 +33,14 @@ class IrGenerator private constructor() {
         }
         val body = compileBlock(function.body, false)
         head then body
-        return CompiledFunction(function.name, ftype, head.first)
+        return CompiledFunction(function.attributes, function.name, ftype, head.first)
     }
 
     private fun compileBlock(block: AstNode.Block<TypeData>, newScope: Boolean = true): Blocks {
         if (newScope) scopes.addFirst(Scope())
         val blocks = compileStatements(block.statements)
         val dropped = scopes.removeFirst().toSet()
-        val tail = BasicBlock(emptyList(), mutableSetOf(), dropped, mutableSetOf(), blocks.second.continuation)
+        val tail = BasicBlock(emptyList(), mutableSetOf(), dropped, blocks.second.continuation)
         blocks.second.continuation = null
         return blocks then tail
     }
@@ -49,7 +51,12 @@ class IrGenerator private constructor() {
 
     private fun compileStatement(statement: AstNode.Statement<TypeData>): Blocks {
         return when (statement) {
-            is AstNode.Expression -> compileExpression(statement)
+            is AstNode.Expression -> buildBlock {
+                +compileExpression(statement)
+                repeat((statement.realType as Type.Function).returnType.size) {
+                    +Insn.Pop()
+                }
+            }
             is AstNode.Assignment -> compileAssignment(statement)
             is AstNode.Block -> compileBlock(statement)
             is AstNode.Declaration -> compileDeclaration(statement)
@@ -114,27 +121,10 @@ class IrGenerator private constructor() {
         for (scope in scopes) {
             val variable = scope.find { it.name == name }
             if (variable != null) {
-                if (scope != scopes.first()) {
-                    outsideVariables.first().add(variable)
-                }
                 return variable
             }
         }
         return null
-    }
-
-    private fun Variable.push(stack: String? = null): List<Insn> {
-        if (this !in scopes.first()) {
-            outsideVariables.first().add(this)
-        }
-        return mapped.map { Insn("push", Argument.Variable(it), stack = stack) }
-    }
-
-    private fun Variable.pop(stack: String? = null): List<Insn> {
-        if (this !in scopes.first()) {
-            outsideVariables.first().add(this)
-        }
-        return mapped.reversed().map { Insn("pop", Argument.Variable(it), stack = stack) }
     }
 
     companion object {
@@ -150,7 +140,6 @@ class IrGenerator private constructor() {
 
         init {
             declaredVariables.addFirst(mutableSetOf())
-            outsideVariables.addFirst(mutableSetOf())
         }
 
         operator fun Insn.unaryPlus() {
@@ -170,11 +159,9 @@ class IrGenerator private constructor() {
             val block = BasicBlock(
                 insns,
                 declaredVariables.removeFirst(),
-                mutableSetOf(),
-                outsideVariables.removeFirst()
+                mutableSetOf()
             )
             declaredVariables.addFirst(mutableSetOf())
-            outsideVariables.addFirst(mutableSetOf())
             blocks = if (::blocks.isInitialized) {
                 blocks then block
             } else {
@@ -186,7 +173,6 @@ class IrGenerator private constructor() {
         fun build(): Blocks {
             popBlock()
             declaredVariables.removeFirst()
-            outsideVariables.removeFirst()
             return blocks
         }
     }

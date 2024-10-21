@@ -1,217 +1,106 @@
 package io.github.seggan.gourmet.compilation
 
-import io.github.seggan.gourmet.compilation.ir.*
-import io.github.seggan.gourmet.parsing.AstNode
-import io.github.seggan.gourmet.typing.Type
-import io.github.seggan.gourmet.typing.TypeData
-import io.github.seggan.gourmet.typing.realType
+import io.github.seggan.gourmet.compilation.ir.BasicBlock
+import io.github.seggan.gourmet.compilation.ir.CompiledFunction
+import io.github.seggan.gourmet.compilation.ir.Continuation
 
-class IrCompiler private constructor(private val ast: AstNode.File<TypeData>) {
+class IrCompiler private constructor(private val functions: List<CompiledFunction>) {
 
-    private val scopes = ArrayDeque<Scope>()
-    private var declaredVariables = ArrayDeque<MutableSet<Variable>>()
-    private var outsideVariables = ArrayDeque<MutableSet<Variable>>()
-
-    private fun compile(): List<CompiledFunction> {
-        return ast.functions.map(::compileFunction)
+    private val allBlocks = functions.flatMap {
+        val children = mutableListOf<BasicBlock>()
+        it.body.putChildren(children)
+        children
     }
 
-    private fun compileFunction(function: AstNode.Function<TypeData>): CompiledFunction {
-        val ftype = function.realType as Type.Function
-        val scope = Scope()
-        scopes.addFirst(scope)
-        val head = buildBlock {
-            val names = function.args.map { it.first }
-            for ((name, type) in names.zip(ftype.args).reversed()) {
-                val variable = Variable.generate(name, type)
-                scope.add(variable)
-                declaredVariables.first().add(variable)
-                +variable.pop()
-            }
-        }
-        val body = compileBlock(function.body, false)
-        head then body
-        return CompiledFunction(function.name, ftype, head.first)
-    }
+    private val blockStates = allBlocks.withIndex().associate { (i, v) -> v.id to i }
 
-    private fun compileBlock(block: AstNode.Block<TypeData>, newScope: Boolean = true): Blocks {
-        if (newScope) scopes.addFirst(Scope())
-        val blocks = compileStatements(block.statements)
-        val dropped = scopes.removeFirst().toSet()
-        val tail = BasicBlock(emptyList(), mutableSetOf(), dropped, mutableSetOf(), blocks.second.continuation)
-        blocks.second.continuation = null
-        return blocks then tail
-    }
+    private val hoisted = mutableSetOf<Variable>()
 
-    private fun compileStatements(statements: AstNode.Statements<TypeData>): Blocks {
-        return statements.statements.map(::compileStatement).reduce(Blocks::then)
-    }
-
-    private fun compileStatement(statement: AstNode.Statement<TypeData>): Blocks {
-        return when (statement) {
-            is AstNode.Expression -> compileExpression(statement)
-            is AstNode.Assignment -> compileAssignment(statement)
-            is AstNode.Block -> compileBlock(statement)
-            is AstNode.Declaration -> compileDeclaration(statement)
-            is AstNode.DoWhile -> TODO()
-            is AstNode.If -> TODO()
-            is AstNode.Return -> compileReturn(statement)
-            is AstNode.Statements -> compileStatements(statement)
-            is AstNode.While -> TODO()
-        }
-    }
-
-    private fun compileAssignment(node: AstNode.Assignment<TypeData>) = buildBlock {
-        val variable = getVariable(node.name)
-            ?: throw CompilationException("Variable not found: ${node.name}")
-        +compileExpression(node.value)
-        +variable.pop()
-    }
-
-    private fun compileDeclaration(node: AstNode.Declaration<TypeData>) = buildBlock {
-        if (getVariable(node.name) != null) {
-            throw CompilationException("Variable already declared: ${node.name}")
-        }
-        val variable = Variable.generate(node.name, node.realType)
-        scopes.first().add(variable)
-        declaredVariables.first().add(variable)
-        if (node.value != null) {
-            +compileExpression(node.value)
-            +variable.pop()
-        }
-    }
-
-    private fun compileReturn(node: AstNode.Return<TypeData>): Blocks {
-        val block = buildBlock { /* TODO */ }
-        block.second.continuation = Continuation.Return
-        return block
-    }
-
-    private fun compileExpression(expression: AstNode.Expression<TypeData>): Blocks {
-        return when (expression) {
-            is AstNode.BinaryExpression -> buildBlock {
-                +compileExpression(expression.left)
-                +compileExpression(expression.right)
-                +expression.operator.compile()
-            }
-
-            is AstNode.BooleanLiteral -> buildBlock { +Insn.Push(if (expression.value) 1 else 0) }
-            is AstNode.CharLiteral -> buildBlock { +Insn.Push(expression.value.code) }
-            is AstNode.FunctionCall -> TODO()
-            is AstNode.MemberAccess -> TODO()
-            is AstNode.NumberLiteral -> buildBlock { +Insn.Push(expression.value) }
-            is AstNode.StringLiteral -> TODO()
-            is AstNode.UnaryExpression -> TODO()
-            is AstNode.Variable -> buildBlock {
-                val variable = getVariable(expression.name)
-                    ?: throw CompilationException("Variable not found: ${expression.name}")
-                +variable.push()
-            }
-        }
-    }
-
-    private fun getVariable(name: String): Variable? {
-        for (scope in scopes) {
-            val variable = scope.find { it.name == name }
-            if (variable != null) {
-                if (scope != scopes.first()) {
-                    outsideVariables.first().add(variable)
+    private fun compile(): String {
+        for (block in allBlocks) {
+            for (variable in block.declaredVariables) {
+                if (variable !in block.droppedVariables) {
+                    hoisted.add(variable)
                 }
-                return variable
             }
         }
-        return null
+        val blocks = allBlocks.map(::compileBlock)
+        val entry = functions.firstOrNull { "entry" in it.attributes }
+            ?: throw CompilationException("No entry function found")
+        val sb = StringBuilder()
+        sb.appendLine("def \$state ${entry.body.state};")
+        sb.appendLine("def @returns;")
+        for (variable in hoisted) {
+            for (part in variable.mapped) {
+                sb.appendLine("def $$part;")
+            }
+        }
+        sb.appendLine("@returns.push ${blockStates.size};")
+        sb.appendLine("while {")
+        sb.appendLine("  push \$state;")
+        sb.appendLine("  lt ${blockStates.size};")
+        sb.appendLine("} {")
+        for (block in blocks) {
+            sb.appendLine(block.lines().joinToString("\n") { "  $it" }.trimEnd())
+        }
+        sb.appendLine("};")
+        return sb.toString()
     }
 
-    private fun Variable.push(stack: String? = null): List<Insn> {
-        if (this !in scopes.first()) {
-            outsideVariables.first().add(this)
+    private fun compileBlock(block: BasicBlock): String {
+        val sb = StringBuilder()
+        for (variable in block.declaredVariables.filterNot { it in hoisted }) {
+            for (part in variable.mapped) {
+                sb.appendLine("def $$part;")
+            }
         }
-        return mapped.map { Insn("push", Argument.Variable(it), stack = stack) }
+        for (insn in block.insns) {
+            sb.appendLine(insn.toIr().trimEnd())
+        }
+        for (variable in block.droppedVariables.filterNot { it in hoisted }) {
+            for (part in variable.mapped) {
+                sb.appendLine("del $$part;")
+            }
+        }
+        when (val cont = block.continuation) {
+            is Continuation.Conditional -> {
+                sb.appendLine("def \$cond;")
+                sb.appendLine("pop \$cond;")
+                sb.appendLine("push \$cond;")
+                sb.appendLine("mul ${cont.then.state};")
+                sb.appendLine("push 1;")
+                sb.appendLine("sub \$cond;")
+                sb.appendLine("mul ${cont.otherwise.state};")
+                sb.appendLine("add { nop; };")
+                sb.appendLine("pop \$state;")
+                sb.appendLine("del \$cond;")
+            }
+
+            is Continuation.Direct -> {
+                sb.appendLine("push ${cont.block.state};")
+                sb.appendLine("pop \$state;")
+            }
+
+            is Continuation.Return -> {
+                sb.appendLine("@returns.pop \$state;")
+            }
+            null -> throw CompilationException("Block has no continuation")
+        }
+
+        val fullBlock = StringBuilder()
+        fullBlock.appendLine("push \$state;")
+        fullBlock.appendLine("eq ${block.state};")
+        fullBlock.appendLine("if {")
+        fullBlock.appendLine(sb.lines().joinToString("\n") { "  $it" }.trimEnd())
+        fullBlock.appendLine("};")
+        return fullBlock.toString()
     }
 
-    private fun Variable.pop(stack: String? = null): List<Insn> {
-        if (this !in scopes.first()) {
-            outsideVariables.first().add(this)
-        }
-        return mapped.reversed().map { Insn("pop", Argument.Variable(it), stack = stack) }
-    }
+    private val BasicBlock.state get() = blockStates[id]!!
 
     companion object {
-        fun compile(ast: AstNode.File<TypeData>): List<CompiledFunction> {
-            return IrCompiler(ast).compile()
+        fun compile(functions: List<CompiledFunction>): String {
+            return IrCompiler(functions).compile()
         }
-    }
-
-    private inner class BlockBuilder {
-        private var insns = mutableListOf<Insn>()
-
-        private lateinit var blocks: Blocks
-
-        init {
-            declaredVariables.addFirst(mutableSetOf())
-            outsideVariables.addFirst(mutableSetOf())
-        }
-
-        operator fun Insn.unaryPlus() {
-            insns.add(this)
-        }
-
-        operator fun List<Insn>.unaryPlus() {
-            insns.addAll(this)
-        }
-
-        operator fun Blocks.unaryPlus() {
-            popBlock()
-            blocks = blocks then this
-        }
-
-        private fun popBlock() {
-            val block = BasicBlock(
-                insns,
-                declaredVariables.removeFirst(),
-                mutableSetOf(),
-                outsideVariables.removeFirst()
-            )
-            declaredVariables.addFirst(mutableSetOf())
-            outsideVariables.addFirst(mutableSetOf())
-            blocks = if (::blocks.isInitialized) {
-                blocks then block
-            } else {
-                block to block
-            }
-            insns = mutableListOf()
-        }
-
-        fun build(): Blocks {
-            popBlock()
-            declaredVariables.removeFirst()
-            outsideVariables.removeFirst()
-            return blocks
-        }
-    }
-
-    private inline fun buildBlock(init: BlockBuilder.() -> Unit): Blocks {
-        return BlockBuilder().apply(init).build()
-    }
-}
-
-private typealias Blocks = Pair<BasicBlock, BasicBlock>
-
-private infix fun Blocks.then(block: BasicBlock): Blocks {
-    if (second.continuation == null) {
-        second.continuation = Continuation.Direct(block)
-        return first to block
-    } else {
-        return this
-    }
-}
-
-private infix fun Blocks.then(blocks: Blocks): Blocks {
-    if (second.continuation == null) {
-        second.continuation = Continuation.Direct(blocks.first)
-        return first to blocks.second
-    } else {
-        return this
     }
 }

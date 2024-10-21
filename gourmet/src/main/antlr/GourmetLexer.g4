@@ -37,6 +37,7 @@ SEMICOLON: ';';
 COLON: ':';
 DOT: '.';
 QUESTION: '?';
+AT: '@';
 
 ASSIGN: '=';
 PLUS_ASSIGN: '+=';

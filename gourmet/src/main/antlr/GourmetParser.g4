@@ -7,7 +7,11 @@ file
     ;
 
 function
-    : FUN Identifier LPAREN (parameter (COMMA parameter)*)? RPAREN (COLON type)? block
+    : attribute* FUN Identifier LPAREN (parameter (COMMA parameter)*)? RPAREN (COLON type)? block
+    ;
+
+attribute
+    : AT Identifier
     ;
 
 parameter

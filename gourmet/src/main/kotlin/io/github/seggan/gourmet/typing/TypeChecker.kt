@@ -48,7 +48,15 @@ class TypeChecker private constructor(private val ast: AstNode.File<Unit>) {
         functions.add(node.name to signature)
         val block = checkBlock(node.body)
         scopes.removeFirst()
-        return AstNode.Function(node.name, node.args, node.returnType, block, node.location, TypeData.Basic(signature))
+        return AstNode.Function(
+            node.attributes,
+            node.name,
+            node.args,
+            node.returnType,
+            block,
+            node.location,
+            TypeData.Basic(signature)
+        )
     }
 
     private fun checkBlock(node: AstNode.Block<Unit>): AstNode.Block<TypeData> {
