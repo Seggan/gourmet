@@ -16,7 +16,7 @@ sealed interface Argument {
         override fun toIr(): String = "$$name"
     }
 
-    data class Block(val insns: List<Instruction>) : Argument {
+    data class Block(val insns: List<Insn>) : Argument {
         override fun toIr(): String = insns.joinToString(
             separator = "\n",
             prefix = "{\n",
@@ -29,4 +29,4 @@ sealed interface Argument {
     }
 }
 
-fun List<Instruction>.block() = Argument.Block(this)
+fun List<Insn>.block() = Argument.Block(this)

@@ -1,6 +1,8 @@
 package io.github.seggan.gourmet.compilation.ir
 
-data class Instruction(
+import java.math.BigDecimal
+
+data class Insn(
     val stack: String?,
     val insn: String,
     val args: List<Argument>
@@ -21,5 +23,11 @@ data class Instruction(
             append(arg.toIr())
         }
         appendLine(';')
+    }
+
+    @Suppress("FunctionName")
+    companion object {
+        fun Push(value: Int, stack: String? = null) = Insn("push", Argument.Number(value), stack = stack)
+        fun Push(value: BigDecimal, stack: String? = null) = Insn("push", Argument.Number(value), stack = stack)
     }
 }

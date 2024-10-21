@@ -94,14 +94,19 @@ class IrCompiler private constructor(private val ast: AstNode.File<TypeData>) {
                 +compileExpression(expression.right)
                 +expression.operator.compile()
             }
-            is AstNode.BooleanLiteral -> TODO()
-            is AstNode.CharLiteral -> TODO()
+
+            is AstNode.BooleanLiteral -> buildBlock { +Insn.Push(if (expression.value) 1 else 0) }
+            is AstNode.CharLiteral -> buildBlock { +Insn.Push(expression.value.code) }
             is AstNode.FunctionCall -> TODO()
             is AstNode.MemberAccess -> TODO()
-            is AstNode.NumberLiteral -> buildBlock { +Instruction("push", Argument.Number(expression.value)) }
+            is AstNode.NumberLiteral -> buildBlock { +Insn.Push(expression.value) }
             is AstNode.StringLiteral -> TODO()
             is AstNode.UnaryExpression -> TODO()
-            is AstNode.Variable -> TODO()
+            is AstNode.Variable -> buildBlock {
+                val variable = getVariable(expression.name)
+                    ?: throw CompilationException("Variable not found: ${expression.name}")
+                +variable.push()
+            }
         }
     }
 
@@ -118,18 +123,18 @@ class IrCompiler private constructor(private val ast: AstNode.File<TypeData>) {
         return null
     }
 
-    private fun Variable.push(stack: String? = null): List<Instruction> {
+    private fun Variable.push(stack: String? = null): List<Insn> {
         if (this !in scopes.first()) {
             outsideVariables.first().add(this)
         }
-        return mapped.map { Instruction("push", Argument.Variable(it), stack = stack) }
+        return mapped.map { Insn("push", Argument.Variable(it), stack = stack) }
     }
 
-    private fun Variable.pop(stack: String? = null): List<Instruction> {
+    private fun Variable.pop(stack: String? = null): List<Insn> {
         if (this !in scopes.first()) {
             outsideVariables.first().add(this)
         }
-        return mapped.reversed().map { Instruction("pop", Argument.Variable(it), stack = stack) }
+        return mapped.reversed().map { Insn("pop", Argument.Variable(it), stack = stack) }
     }
 
     companion object {
@@ -139,7 +144,7 @@ class IrCompiler private constructor(private val ast: AstNode.File<TypeData>) {
     }
 
     private inner class BlockBuilder {
-        private var insns = mutableListOf<Instruction>()
+        private var insns = mutableListOf<Insn>()
 
         private lateinit var blocks: Blocks
 
@@ -148,11 +153,11 @@ class IrCompiler private constructor(private val ast: AstNode.File<TypeData>) {
             outsideVariables.addFirst(mutableSetOf())
         }
 
-        operator fun Instruction.unaryPlus() {
+        operator fun Insn.unaryPlus() {
             insns.add(this)
         }
 
-        operator fun List<Instruction>.unaryPlus() {
+        operator fun List<Insn>.unaryPlus() {
             insns.addAll(this)
         }
 
@@ -210,5 +215,3 @@ private infix fun Blocks.then(blocks: Blocks): Blocks {
         return this
     }
 }
-
-class CompilationException(message: String) : Exception(message)
