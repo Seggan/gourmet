@@ -6,7 +6,8 @@ data class ChefProgram(
     val name: String,
     val ingredients: List<Pair<BigInteger?, String>>,
     val steps: List<ChefStatement>,
-    val functions: List<ChefProgram>
+    val functions: List<ChefProgram>,
+    val comment: String = "",
 ) {
 
     fun toCode(): String {
@@ -18,6 +19,8 @@ data class ChefProgram(
         return """
             $name.
             
+            %s
+            
             Ingredients.
             %s
             
@@ -27,6 +30,6 @@ data class ChefProgram(
             Serves 1.
             
             %s
-        """.trimIndent().format(ingredients, steps, functions)
+        """.trimIndent().format(comment, ingredients, steps, functions).trim()
     }
 }

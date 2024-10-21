@@ -40,7 +40,6 @@ tasks.generateGrammarSource {
         "-visitor",
         "-no-listener",
         "-encoding", "UTF-8",
-        "-package", "io.github.seggan.gourmet.antlr"
     )
     outputDirectory = fullPath
 }

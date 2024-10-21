@@ -1,5 +1,9 @@
 lexer grammar GourmetLexer;
 
+@header {
+    package io.github.seggan.gourmet.antlr;
+}
+
 LineComment
     : '//' ~[\r\n]* -> channel(HIDDEN)
     ;
@@ -24,6 +28,9 @@ IN: 'in';
 BREAK: 'break';
 CONTINUE: 'continue';
 RETURN: 'return';
+
+ASM: 'asm';
+SIZEOF: 'sizeof';
 
 LPAREN: '(';
 RPAREN: ')';

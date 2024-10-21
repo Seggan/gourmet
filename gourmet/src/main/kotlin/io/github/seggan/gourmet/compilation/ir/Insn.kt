@@ -30,5 +30,7 @@ data class Insn(
         fun Push(value: Int, stack: String? = null) = Insn("push", Argument.Number(value), stack = stack)
         fun Push(value: BigDecimal, stack: String? = null) = Insn("push", Argument.Number(value), stack = stack)
         fun Pop(stack: String? = null) = Insn("pop", stack = stack)
+
+        fun raw(asm: String) = Insn(null, asm.trimEnd().trimEnd(';'), emptyList())
     }
 }

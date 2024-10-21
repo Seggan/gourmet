@@ -2,6 +2,10 @@ parser grammar GourmetParser;
 
 options { tokenVocab = GourmetLexer; }
 
+@header {
+    package io.github.seggan.gourmet.antlr;
+}
+
 file
     : function* EOF
     ;
@@ -61,7 +65,7 @@ return
 expression
     : primary
     | expression DOT Identifier
-    | prefixOp=(NOT | MINUS | STAR) expression
+    | prefixOp=(NOT | MINUS | STAR | ASM | SIZEOF) expression
     | expression op=(STAR | SLASH | PERCENT) expression
     | expression op=(PLUS | MINUS) expression
     | expression op=(EQ | NE | LT | LE | GT | GE) expression
@@ -72,11 +76,14 @@ primary
     : LPAREN paren=expression RPAREN
     | variable=Identifier
     | Number
-    | String
-    | MultilineString
+    | string
     | Char
     | Boolean
     | fn=Identifier generic LPAREN (expression (COMMA expression)*)? RPAREN
+    ;
+
+string
+    : AT? (String | MultilineString)
     ;
 
 type

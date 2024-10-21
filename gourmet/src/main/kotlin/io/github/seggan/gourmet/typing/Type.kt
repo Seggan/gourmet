@@ -21,8 +21,7 @@ sealed interface Type {
 
     data object Never : Type {
         override val tname = "Never"
-        override val size: Int
-            get() = throw UnsupportedOperationException("Never type has no size")
+        override val size = 0
 
         override fun isAssignableTo(other: Type): Boolean {
             return true

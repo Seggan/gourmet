@@ -5,6 +5,7 @@ import io.github.seggan.gourmet.compilation.ir.CompiledFunction
 import io.github.seggan.gourmet.compilation.ir.Continuation
 import io.github.seggan.gourmet.compilation.ir.Insn
 import io.github.seggan.gourmet.parsing.AstNode
+import io.github.seggan.gourmet.parsing.UnOp
 import io.github.seggan.gourmet.typing.Type
 import io.github.seggan.gourmet.typing.TypeData
 import io.github.seggan.gourmet.typing.realType
@@ -53,7 +54,7 @@ class IrGenerator private constructor() {
         return when (statement) {
             is AstNode.Expression -> buildBlock {
                 +compileExpression(statement)
-                repeat((statement.realType as Type.Function).returnType.size) {
+                repeat(statement.realType.size) {
                     +Insn.Pop()
                 }
             }
@@ -108,13 +109,40 @@ class IrGenerator private constructor() {
             is AstNode.MemberAccess -> TODO()
             is AstNode.NumberLiteral -> buildBlock { +Insn.Push(expression.value) }
             is AstNode.StringLiteral -> TODO()
-            is AstNode.UnaryExpression -> TODO()
+            is AstNode.UnaryExpression -> when (expression.operator) {
+                UnOp.ASM -> compileAsm(expression)
+                UnOp.SIZEOF -> compileSizeof(expression)
+                else -> buildBlock {
+                    +compileExpression(expression.value)
+                    +expression.operator.compile()
+                }
+            }
             is AstNode.Variable -> buildBlock {
                 val variable = getVariable(expression.name)
                     ?: throw CompilationException("Variable not found: ${expression.name}", expression.location)
                 +variable.push()
             }
         }
+    }
+
+    private fun compileAsm(expression: AstNode.UnaryExpression<TypeData>) = buildBlock {
+        val literal = expression.value
+        if (literal !is AstNode.StringLiteral) {
+            throw CompilationException("asm requires a string literal", expression.location)
+        }
+        val value = literal.value
+        val mangled = variableReplacementRegex.replace(value) {
+            val name = it.groupValues[1]
+            val part = it.groupValues.getOrNull(2)?.toIntOrNull() ?: 0
+            val variable = getVariable(name)
+                ?: throw CompilationException("Variable not found: $name", expression.location)
+            '$' + variable.mapped[part]
+        }
+        +Insn.raw(mangled)
+    }
+
+    private fun compileSizeof(expression: AstNode.UnaryExpression<TypeData>) = buildBlock {
+        +Insn.Push(expression.value.realType.size)
     }
 
     private fun getVariable(name: String): Variable? {
@@ -201,3 +229,5 @@ private infix fun Blocks.then(blocks: Blocks): Blocks {
         return this
     }
 }
+
+private val variableReplacementRegex = Regex("""\[([a-zA-Z_][a-zA-Z0-9_]*)(?::(\d+))?]""")

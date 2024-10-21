@@ -12,7 +12,7 @@ class IrCompiler private constructor(private val functions: List<CompiledFunctio
         children
     }
 
-    private val blockStates = allBlocks.withIndex().associate { (i, v) -> v.id to i }
+    private val blockStates = allBlocks.withIndex().associate { (i, v) -> v.id to i + 1 }
 
     private val hoisted = mutableSetOf<Variable>()
 
@@ -35,11 +35,8 @@ class IrCompiler private constructor(private val functions: List<CompiledFunctio
                 sb.appendLine("def $$part;")
             }
         }
-        sb.appendLine("@returns.push ${blockStates.size};")
-        sb.appendLine("while {")
-        sb.appendLine("  push \$state;")
-        sb.appendLine("  lt ${blockStates.size};")
-        sb.appendLine("} {")
+        sb.appendLine("@returns.push 0;")
+        sb.appendLine("while \$state {")
         for (block in blocks) {
             sb.appendLine(block.lines().joinToString("\n") { "  $it" }.trimEnd())
         }

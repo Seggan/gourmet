@@ -8,6 +8,7 @@ import io.github.seggan.recipe.parsing.flatten
 import java.lang.reflect.InvocationTargetException
 import java.math.BigDecimal
 import java.math.BigInteger
+import java.util.TreeSet
 
 @Suppress("unused", "UNUSED_PARAMETER")
 class Compiler(private val sourceName: String, private val code: List<AstNode>, private val debug: Boolean = false) {
@@ -16,6 +17,8 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
     private val allRegisters = mutableListOf<Pair<BigInteger?, String>>()
     private val tempRegisters = ArrayDeque<Register>()
     private val variables = mutableMapOf<String, Register>()
+
+    private val comments = TreeSet<String>()
 
     private var registerIndex = 0
 
@@ -45,6 +48,7 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
             for (arg in it.args.reversed()) {
                 val reg = Register.Variable(compiler.getTempRegister().name)
                 compiler.variables[arg] = reg
+                comments += "${reg.name} = $arg"
                 compiler.instructions += ChefStatement.Pop(reg, argumentStack)
             }
             compiler.compile()
@@ -58,7 +62,8 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
             lastExpanded = expanded
             expanded = expandMacros(expanded, macros)
         } while (expanded != lastExpanded)
-        functionsReturn[sourceName] = expanded.flatMap(AstNode::flatten).any { it is AstNode.Invocation && it.name == "return"}
+        functionsReturn[sourceName] =
+            expanded.flatMap(AstNode::flatten).any { it is AstNode.Invocation && it.name == "return" }
         compileBlock(expanded)
         if (buffered > 0) {
             throw IllegalStateException("Unflushed print buffer: $buffered")
@@ -69,7 +74,7 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
         if (functionsReturn[sourceName] == true) {
             instructions += ChefStatement.Clear(returnStack)
         }
-        return ChefProgram(sourceName, allRegisters, instructions, functions)
+        return ChefProgram(sourceName, allRegisters, instructions, functions, comments.joinToString("\n"))
     }
 
     private fun getNewRegister(initial: BigInteger?, temp: Boolean = false): Register {
@@ -98,6 +103,7 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
             if (needsExtra) {
                 instructions += ChefStatement.Pop(reg, currentStack)
             }
+            comments += "${reg.name} = $constant"
             reg
         }
     }
@@ -204,7 +210,12 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
     //<editor-fold desc="Builtins">
     fun idef(stack: ChefStack, args: List<AstNode.Expression>) {
         when (val arg = args[0]) {
-            is AstNode.Register -> variables[arg.name] = Register.Variable(getTempRegister().name)
+            is AstNode.Register -> {
+                val reg = Register.Variable(getTempRegister().name)
+                variables[arg.name] = reg
+                comments += "${reg.name} = $${arg.name}"
+            }
+
             is AstNode.Stack -> {
                 var idx = 5
                 val used = stacks.values.map { it.num }.toSet()
@@ -326,7 +337,8 @@ class Compiler(private val sourceName: String, private val code: List<AstNode>, 
     }
 
     fun icall(stack: ChefStack, args: List<AstNode.Expression>) {
-        val name = (args[0] as? AstNode.Register)?.name ?: throw IllegalArgumentException("Invalid function: ${args[0]}")
+        val name =
+            (args[0] as? AstNode.Register)?.name ?: throw IllegalArgumentException("Invalid function: ${args[0]}")
         val doesReturn = functionsReturn[name] ?: throw IllegalArgumentException("Unknown function: $name")
         for (arg in args.drop(1)) {
             instructions += ChefStatement.Push(arg.getRegister(stack).also(Register::close), argumentStack)

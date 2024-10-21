@@ -137,17 +137,29 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
                 Unit
             )
 
-            ctx.String() != null -> AstNode.StringLiteral(
-                unescapeString(ctx.String().text.drop(1).dropLast(1)),
-                ctx.location,
-                Unit
-            )
+            ctx.string() != null -> {
+                val stringObj = ctx.string()
+                val raw = stringObj.AT() != null
+                when {
+                    stringObj.String() != null -> {
+                        var text = stringObj.String().text.drop(1).dropLast(1)
+                        if (!raw) {
+                            text = unescapeString(text)
+                        }
+                        AstNode.StringLiteral(text, ctx.location, Unit)
+                    }
 
-            ctx.MultilineString() != null -> AstNode.StringLiteral(
-                unescapeString(ctx.MultilineString().text.drop(3).dropLast(3)),
-                ctx.location,
-                Unit
-            )
+                    stringObj.MultilineString() != null -> {
+                        var text = stringObj.MultilineString().text.drop(3).dropLast(3)
+                        if (!raw) {
+                            text = unescapeString(text.trimIndent())
+                        }
+                        AstNode.StringLiteral(text, ctx.location, Unit)
+                    }
+
+                    else -> throw AssertionError()
+                }
+            }
 
             ctx.Char() != null -> AstNode.CharLiteral(
                 unescapeString(ctx.Char().text.drop(1).dropLast(1)).single(),
@@ -168,8 +180,13 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
                 ctx.location,
                 Unit
             )
-            else -> error("Unexpected primary: $ctx")
+
+            else -> throw AssertionError()
         }
+    }
+
+    override fun aggregateResult(aggregate: AstNode<Unit>?, nextResult: AstNode<Unit>?): AstNode<Unit> {
+        return nextResult ?: aggregate ?: defaultResult()
     }
 }
 
