@@ -5,3 +5,11 @@ fun print(c: Char) {
     flushStr;
     """;
 }
+
+@inline
+fun print(i: Number) {
+    asm """
+    print [i];
+    flush;
+    """;
+}

@@ -89,7 +89,14 @@ class IrGenerator private constructor(
     private fun compileAssignment(node: AstNode.Assignment<TypeData>) = buildBlock {
         val variable = getVariable(node.name)
             ?: throw CompilationException("Variable not found: ${node.name}", node.location)
-        +compileExpression(node.value)
+        val op = node.assignType.op
+        if (op == null) {
+            +compileExpression(node.value)
+        } else {
+            +variable.push()
+            +compileExpression(node.value)
+            +op.compile()
+        }
         +variable.pop()
     }
 

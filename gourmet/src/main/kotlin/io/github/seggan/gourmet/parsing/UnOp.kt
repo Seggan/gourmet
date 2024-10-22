@@ -12,40 +12,40 @@ enum class UnOp(private val token: Int) {
 
     NOT(GourmetParser.NOT) {
         override fun checkType(arg: Type, location: Location): Type {
-            if (arg != Type.Primitive.BOOLEAN) {
-                throw TypeException("Expected Boolean, got $arg", location)
+            if (arg.isAssignableTo(Type.Primitive.BOOLEAN)) {
+                return Type.Primitive.BOOLEAN
             }
-            return Type.Primitive.BOOLEAN
+            throw TypeException("Expected Boolean, got $arg", location)
         }
 
         override fun compile() = listOf(Insn("not", Argument.UseStack))
     },
     NEG(GourmetParser.MINUS) {
         override fun checkType(arg: Type, location: Location): Type {
-            if (arg != Type.Primitive.NUMBER) {
-                throw TypeException("Expected Number, got $arg", location)
+            if (arg.isAssignableTo(Type.Primitive.NUMBER)) {
+                return Type.Primitive.NUMBER
             }
-            return Type.Primitive.NUMBER
+            throw TypeException("Expected Number, got $arg", location)
         }
 
         override fun compile() = listOf(Insn("neg", Argument.UseStack))
     },
     DEREF(GourmetParser.STAR) {
         override fun checkType(arg: Type, location: Location): Type {
-            if (arg !is Type.Pointer) {
-                throw TypeException("Expected a pointer, got $arg", location)
+            if (arg is Type.Pointer) {
+                return arg.target
             }
-            return arg.target
+            throw TypeException("Expected a pointer, got $arg", location)
         }
 
         override fun compile() = TODO()
     },
     ASM(GourmetParser.ASM) {
         override fun checkType(arg: Type, location: Location): Type {
-            if (arg != Type.STRING) {
-                throw TypeException("Expected String, got $arg", location)
+            if (arg.isAssignableTo(Type.STRING)) {
+                return Type.Never
             }
-            return Type.Never
+            throw TypeException("Expected String, got $arg", location)
         }
 
         override fun compile() = throw AssertionError("asm is compiled separately")

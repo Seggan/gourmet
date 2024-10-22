@@ -90,10 +90,15 @@ class TypeChecker private constructor(
     private fun checkAssignment(node: AstNode.Assignment<Unit>): AstNode.Assignment<TypeData> {
         val value = checkExpression(node.value)
         val type = findVariable(node.name, node.location)
-        if (!value.realType.isAssignableTo(type)) {
-            throw TypeException("Cannot assign ${value.extra} to $type", node.location)
+        val assignOp = node.assignType.op
+        if (assignOp == null) {
+            if (!value.realType.isAssignableTo(type)) {
+                throw TypeException("Cannot assign ${value.extra} to $type", node.location)
+            }
+        } else {
+            assignOp.checkType(type, value.realType, node.location)
         }
-        return AstNode.Assignment(node.name, value, node.location, TypeData.Basic(type))
+        return AstNode.Assignment(node.name, node.assignType, value, node.location, TypeData.Basic(type))
     }
 
     private fun checkReturn(node: AstNode.Return<Unit>): AstNode.Return<TypeData> {

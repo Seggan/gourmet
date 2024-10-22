@@ -39,7 +39,8 @@ declaration
     ;
 
 assignment
-    : Identifier ASSIGN expression SEMICOLON
+    : Identifier assignType=(ASSIGN | PLUS_ASSIGN | MINUS_ASSIGN | MULT_ASSIGN | DIV_ASSIGN | MOD_ASSIGN)
+     expression SEMICOLON
     ;
 
 if
