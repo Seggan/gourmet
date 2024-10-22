@@ -49,8 +49,7 @@ class BlockOptimizer private constructor(private val head: BasicBlock) {
     }
 
     private val BasicBlock.predecessors: List<BasicBlock>
-        get() = mutableListOf<BasicBlock>().apply(head::putChildren)
-            .filter { it.continuation?.continuesTo(this) == true }
+        get() = head.children.filter { it.continuation?.continuesTo(this) == true }
 
     companion object {
         fun optimize(head: BasicBlock): BasicBlock {

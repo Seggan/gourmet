@@ -6,6 +6,7 @@ import io.github.seggan.gourmet.compilation.ir.Continuation
 import io.github.seggan.gourmet.compilation.ir.Insn
 import io.github.seggan.gourmet.parsing.AstNode
 import io.github.seggan.gourmet.parsing.UnOp
+import io.github.seggan.gourmet.typing.Signature
 import io.github.seggan.gourmet.typing.Type
 import io.github.seggan.gourmet.typing.TypeData
 import io.github.seggan.gourmet.typing.realType
@@ -16,13 +17,20 @@ class IrGenerator private constructor(private val ast: AstNode.File<TypeData>) {
     private var declaredVariables = ArrayDeque<MutableSet<Variable>>()
 
     private val functions = ast.functions.map { Signature(it.name, it.realType as Type.Function) }.toSet()
+    private val compiledFunctions = mutableListOf<CompiledFunction>()
+    private val noinline = mutableSetOf<Signature>()
 
     private fun compile(): List<CompiledFunction> {
-        return ast.functions.map(::compileFunction)
+        ast.functions.forEach(::compileFunction)
+        return compiledFunctions.filter { "inline" !in it.attributes || it.signature in noinline }
     }
 
-    private fun compileFunction(function: AstNode.Function<TypeData>): CompiledFunction {
+    private fun compileFunction(function: AstNode.Function<TypeData>) {
         val ftype = function.realType as Type.Function
+        val signature = Signature(function.name, ftype)
+        if ("inline" in function.attributes && signature in noinline) {
+            System.err.println("Warning: inline function ${function.name} used before declaration; not inlining")
+        }
         val scope = Scope()
         scopes.addFirst(scope)
         val head = buildBlock {
@@ -36,7 +44,7 @@ class IrGenerator private constructor(private val ast: AstNode.File<TypeData>) {
         }
         val body = compileBlock(function.body, false)
         head then body
-        return CompiledFunction(Signature(function.name, ftype), function.attributes, head.first)
+        compiledFunctions.add(CompiledFunction(signature, function.attributes, head.first))
     }
 
     private fun compileBlock(block: AstNode.Block<TypeData>, newScope: Boolean = true): Blocks {
@@ -60,6 +68,7 @@ class IrGenerator private constructor(private val ast: AstNode.File<TypeData>) {
                     +Insn.Pop()
                 }
             }
+
             is AstNode.Assignment -> compileAssignment(node)
             is AstNode.Block -> compileBlock(node)
             is AstNode.Declaration -> compileDeclaration(node)
@@ -119,6 +128,7 @@ class IrGenerator private constructor(private val ast: AstNode.File<TypeData>) {
                     +node.operator.compile()
                 }
             }
+
             is AstNode.Variable -> buildBlock {
                 val variable = getVariable(node.name)
                     ?: throw CompilationException("Variable not found: ${node.name}", node.location)
@@ -148,25 +158,41 @@ class IrGenerator private constructor(private val ast: AstNode.File<TypeData>) {
     }
 
     private fun compileCall(node: AstNode.FunctionCall<TypeData>): Blocks {
-        val signature = Signature(node.name, (node.extra as TypeData.FunctionCall).overload)
+        val signature = (node.extra as TypeData.FunctionCall).overload
         if (signature !in functions) {
             throw CompilationException("Function not found: ${node.name}", node.location)
         }
-        val callBlock = buildBlock {
+        val argBlock = buildBlock {
             for (arg in node.args) {
                 +compileExpression(arg)
             }
-            for (variable in scopes.flatten()) {
-                +variable.push("callStack")
-            }
         }
-        val restoreBlock = buildBlock {
-            for (variable in scopes.flatten().reversed()) {
-                +variable.pop("callStack")
+        val compiled = compiledFunctions.firstOrNull { it.signature == signature }
+        if (compiled != null && "inline" in compiled.attributes) {
+            val endBlock = buildBlock {}
+            val body = compiled.body.clone()
+            for (child in body.children) {
+                if (child.continuation is Continuation.Return) {
+                    child.continuation = Continuation.Direct(endBlock.first)
+                }
             }
+            argBlock.second.continuation = Continuation.Direct(body)
+            return argBlock.first to endBlock.second
+        } else {
+            noinline.add(signature)
+            val callBlock = argBlock then buildBlock {
+                for (variable in scopes.flatten()) {
+                    +variable.push("callStack")
+                }
+            }
+            val restoreBlock = buildBlock {
+                for (variable in scopes.flatten().reversed()) {
+                    +variable.pop("callStack")
+                }
+            }
+            callBlock.second.continuation = Continuation.Call(signature, restoreBlock.first)
+            return callBlock.first to restoreBlock.second
         }
-        callBlock.second.continuation = Continuation.Call(signature, restoreBlock.first)
-        return callBlock.first to restoreBlock.second
     }
 
     private fun getVariable(name: String): Variable? {

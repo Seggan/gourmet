@@ -1,6 +1,6 @@
 package io.github.seggan.gourmet.compilation.ir
 
-import io.github.seggan.gourmet.compilation.Signature
+import io.github.seggan.gourmet.typing.Signature
 import io.github.seggan.gourmet.typing.TypeData.Empty.type
 import io.github.seggan.gourmet.util.randomString
 
@@ -12,8 +12,7 @@ data class CompiledFunction(
 
 fun CompiledFunction.toGraph(): String {
     val returnName = randomString()
-    val children = mutableListOf<BasicBlock>()
-    body.putChildren(children)
+    val children = body.children
     val nodes = mutableSetOf<String>()
     val edges = mutableSetOf<String>()
     for (block in children) {

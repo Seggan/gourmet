@@ -10,5 +10,5 @@ sealed interface TypeData {
 
     data class Basic(override val type: Type) : TypeData
 
-    data class FunctionCall(override val type: Type, val overload: Type.Function) : TypeData
+    data class FunctionCall(override val type: Type, val overload: Signature) : TypeData
 }

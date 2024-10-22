@@ -14,38 +14,24 @@ class TypeChecker private constructor(private val ast: AstNode.File<Unit>) {
         Type.Never
     ).associateBy { it.tname }
 
-    private val functions = mutableListOf<Pair<String, Type.Function>>()
+    private val functions = ast.functions.map { node ->
+        val args = node.args.map { it.second.resolve(node.location) }
+        val returnType = node.returnType?.resolve(node.location) ?: Type.Unit
+        val type = Type.Function(emptyList(), args, returnType)
+        val signature = Signature(node.name, type)
+        node to signature
+    }
+
     private val scopes = ArrayDeque<MutableList<Pair<String, Type>>>()
-
-    private fun TypeName.resolve(location: Location): Type {
-        return when (this) {
-            is TypeName.Simple -> types[name] ?: throw TypeException("Unknown type: $this", location)
-            is TypeName.Pointer -> Type.Pointer(type.resolve(location))
-            is TypeName.Generic -> Type.Generic(name)
-        }
-    }
-
-    private fun findVariable(name: String, location: Location): Type {
-        for (scope in scopes) {
-            for ((n, t) in scope) {
-                if (n == name) {
-                    return t
-                }
-            }
-        }
-        throw TypeException("Unknown variable: $name", location)
-    }
 
     private fun check(): AstNode.File<TypeData> {
         return AstNode.File(ast.functions.map(::checkFunction), ast.location, TypeData.Empty)
     }
 
     private fun checkFunction(node: AstNode.Function<Unit>): AstNode.Function<TypeData> {
-        val args = node.args.map { (name, type) -> name to type.resolve(node.location) }
+        val type = functions.first { it.first == node }.second.type
+        val args = node.args.unzip().first.zip(type.args)
         scopes.addFirst(args.toMutableList())
-        val returnType = node.returnType?.resolve(node.location) ?: Type.Unit
-        val signature = Type.Function(emptyList(), args.map { it.second }, returnType)
-        functions.add(node.name to signature)
         val block = checkBlock(node.body)
         scopes.removeFirst()
         return AstNode.Function(
@@ -55,7 +41,7 @@ class TypeChecker private constructor(private val ast: AstNode.File<Unit>) {
             node.returnType,
             block,
             node.location,
-            TypeData.Basic(signature)
+            TypeData.Basic(type)
         )
     }
 
@@ -108,7 +94,7 @@ class TypeChecker private constructor(private val ast: AstNode.File<Unit>) {
     private fun checkReturn(node: AstNode.Return<Unit>): AstNode.Return<TypeData> {
         val value = node.value?.let(::checkExpression)
         val valueType = value?.realType ?: Type.Unit
-        val returnType = functions.last().second.returnType
+        val returnType = functions.last().second.type.returnType
         if (!valueType.isAssignableTo(returnType)) {
             throw TypeException(
                 "Cannot return $valueType from function with return type $returnType",
@@ -200,9 +186,9 @@ class TypeChecker private constructor(private val ast: AstNode.File<Unit>) {
 
     private fun checkFunctionCall(node: AstNode.FunctionCall<Unit>): AstNode.FunctionCall<TypeData> {
         var exception = TypeException("Unknown function: ${node.name}", node.location)
-        outer@ for (function in functions) {
-            if (function.first != node.name) continue
-            var type = function.second
+        outer@ for ((_, function) in functions) {
+            if (function.name != node.name) continue
+            var type = function.type
             if (node.genericArgs.size != type.genericArgs.size) {
                 exception = TypeException(
                     "Expected ${type.genericArgs.size} generic arguments, got ${node.genericArgs.size}",
@@ -233,7 +219,7 @@ class TypeChecker private constructor(private val ast: AstNode.File<Unit>) {
                 node.genericArgs,
                 args,
                 node.location,
-                TypeData.FunctionCall(type.returnType, function.second)
+                TypeData.FunctionCall(type.returnType, function)
             )
         }
         throw exception
@@ -246,6 +232,25 @@ class TypeChecker private constructor(private val ast: AstNode.File<Unit>) {
         val member = type.fields.firstOrNull { it.first == node.member }
             ?: throw TypeException("Unknown member: ${node.member}", node.location)
         return AstNode.MemberAccess(expr, node.member, node.location, TypeData.Basic(member.second))
+    }
+
+    private fun TypeName.resolve(location: Location): Type {
+        return when (this) {
+            is TypeName.Simple -> types[name] ?: throw TypeException("Unknown type: $this", location)
+            is TypeName.Pointer -> Type.Pointer(type.resolve(location))
+            is TypeName.Generic -> Type.Generic(name)
+        }
+    }
+
+    private fun findVariable(name: String, location: Location): Type {
+        for (scope in scopes) {
+            for ((n, t) in scope) {
+                if (n == name) {
+                    return t
+                }
+            }
+        }
+        throw TypeException("Unknown variable: $name", location)
     }
 
     companion object {

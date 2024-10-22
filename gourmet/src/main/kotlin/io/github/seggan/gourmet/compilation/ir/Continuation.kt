@@ -1,6 +1,6 @@
 package io.github.seggan.gourmet.compilation.ir
 
-import io.github.seggan.gourmet.compilation.Signature
+import io.github.seggan.gourmet.typing.Signature
 
 sealed interface Continuation {
 
@@ -10,6 +10,8 @@ sealed interface Continuation {
         }
 
         override fun continuesTo(block: BasicBlock) = this.block === block
+
+        override fun clone(): Continuation = Direct(block.clone())
     }
 
     data class Conditional(val then: BasicBlock, val otherwise: BasicBlock) : Continuation {
@@ -21,6 +23,8 @@ sealed interface Continuation {
         }
 
         override fun continuesTo(block: BasicBlock) = then === block || otherwise === block
+
+        override fun clone(): Continuation = Conditional(then.clone(), otherwise.clone())
     }
 
     data class Call(val function: Signature, val returnTo: BasicBlock) : Continuation {
@@ -29,13 +33,17 @@ sealed interface Continuation {
         }
 
         override fun continuesTo(block: BasicBlock) = returnTo === block
+
+        override fun clone(): Continuation = Call(function, returnTo.clone())
     }
 
     data object Return : Continuation {
         override fun swap(previous: BasicBlock, new: BasicBlock): Continuation = this
         override fun continuesTo(block: BasicBlock) = false
+        override fun clone(): Continuation = this
     }
 
     fun swap(previous: BasicBlock, new: BasicBlock): Continuation
     fun continuesTo(block: BasicBlock): Boolean
+    fun clone(): Continuation
 }

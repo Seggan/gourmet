@@ -6,13 +6,9 @@ import io.github.seggan.gourmet.compilation.ir.Continuation
 
 class IrCompiler private constructor(private val functions: List<CompiledFunction>) {
 
-    private val allBlocks = functions.flatMap {
-        val children = mutableListOf<BasicBlock>()
-        it.body.putChildren(children)
-        children
-    }
+    private val allBlocks = functions.flatMap { it.body.children }
 
-    val entryPoints = functions.associate { it.signature to it.body }
+    private val entryPoints = functions.associate { it.signature to it.body }
 
     private val blockStates = allBlocks.withIndex().associate { (i, v) -> v.id to i + 1 }
 
@@ -90,6 +86,7 @@ class IrCompiler private constructor(private val functions: List<CompiledFunctio
             is Continuation.Return -> {
                 sb.appendLine("@returns.pop \$state;")
             }
+
             null -> throw CompilationException("Block has no continuation")
         }
 

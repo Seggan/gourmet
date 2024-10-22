@@ -11,7 +11,16 @@ data class BasicBlock(
 ) {
     val id = randomString()
 
-    fun putChildren(children: MutableList<BasicBlock>) {
+    val children: List<BasicBlock> get() = mutableListOf<BasicBlock>().apply(::putChildren)
+
+    fun clone() = BasicBlock(
+        insns.toList(),
+        declaredVariables.toSet(),
+        droppedVariables.toSet(),
+        continuation?.clone()
+    )
+
+    private fun putChildren(children: MutableList<BasicBlock>) {
         if (children.any { it.id == id }) return
         children.add(this)
         when (val cont = continuation) {
