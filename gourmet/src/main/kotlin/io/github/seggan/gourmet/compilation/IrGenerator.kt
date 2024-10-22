@@ -11,18 +11,24 @@ import io.github.seggan.gourmet.typing.Type
 import io.github.seggan.gourmet.typing.TypeData
 import io.github.seggan.gourmet.typing.realType
 
-class IrGenerator private constructor(private val ast: AstNode.File<TypeData>) {
+class IrGenerator private constructor(
+    private val ast: AstNode.File<TypeData>,
+    private val compiledFunctions: MutableList<CompiledFunction>
+) {
 
     private val scopes = ArrayDeque<Scope>()
     private var declaredVariables = ArrayDeque<MutableSet<Variable>>()
 
-    private val functions = ast.functions.map { Signature(it.name, it.realType as Type.Function) }.toSet()
-    private val compiledFunctions = mutableListOf<CompiledFunction>()
+    private val functions = ast.functions.map {
+        Signature(it.name, it.realType as Type.Function)
+    }.toSet() + compiledFunctions.map { it.signature }
+
     private val noinline = mutableSetOf<Signature>()
 
-    private fun compile(): List<CompiledFunction> {
+    private fun compile(removeUnused: Boolean): List<CompiledFunction> {
         ast.functions.forEach(::compileFunction)
-        return compiledFunctions.filter { "inline" !in it.attributes || it.signature in noinline }
+        return if (removeUnused) compiledFunctions.filter { "entry" in it.attributes || it.signature in noinline }
+        else compiledFunctions
     }
 
     private fun compileFunction(function: AstNode.Function<TypeData>) {
@@ -254,8 +260,12 @@ class IrGenerator private constructor(private val ast: AstNode.File<TypeData>) {
     }
 
     companion object {
-        fun generate(ast: AstNode.File<TypeData>): List<CompiledFunction> {
-            return IrGenerator(ast).compile()
+        fun generate(
+            ast: AstNode.File<TypeData>,
+            external: List<CompiledFunction> = emptyList(),
+            removeUnused: Boolean = true
+        ): List<CompiledFunction> {
+            return IrGenerator(ast, external.toMutableList()).compile(removeUnused)
         }
     }
 }

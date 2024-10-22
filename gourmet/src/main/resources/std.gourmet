@@ -1,0 +1,7 @@
+@inline
+fun print(c: Char) {
+    asm """
+    print [c];
+    flushStr;
+    """;
+}

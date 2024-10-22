@@ -4,7 +4,10 @@ import io.github.seggan.gourmet.parsing.AstNode
 import io.github.seggan.gourmet.parsing.TypeName
 import io.github.seggan.gourmet.util.Location
 
-class TypeChecker private constructor(private val ast: AstNode.File<Unit>) {
+class TypeChecker private constructor(
+    private val ast: AstNode.File<Unit>,
+    private val functions: MutableList<Pair<AstNode.Function<Unit>?, Signature>>
+) {
 
     private val types = listOf(
         Type.Primitive.BOOLEAN,
@@ -14,15 +17,17 @@ class TypeChecker private constructor(private val ast: AstNode.File<Unit>) {
         Type.Never
     ).associateBy { it.tname }
 
-    private val functions = ast.functions.map { node ->
-        val args = node.args.map { it.second.resolve(node.location) }
-        val returnType = node.returnType?.resolve(node.location) ?: Type.Unit
-        val type = Type.Function(emptyList(), args, returnType)
-        val signature = Signature(node.name, type)
-        node to signature
-    }
-
     private val scopes = ArrayDeque<MutableList<Pair<String, Type>>>()
+
+    init {
+        functions += ast.functions.map { node ->
+            val args = node.args.map { it.second.resolve(node.location) }
+            val returnType = node.returnType?.resolve(node.location) ?: Type.Unit
+            val type = Type.Function(emptyList(), args, returnType)
+            val signature = Signature(node.name, type)
+            node to signature
+        }
+    }
 
     private fun check(): AstNode.File<TypeData> {
         return AstNode.File(ast.functions.map(::checkFunction), ast.location, TypeData.Empty)
@@ -254,8 +259,8 @@ class TypeChecker private constructor(private val ast: AstNode.File<Unit>) {
     }
 
     companion object {
-        fun check(ast: AstNode.File<Unit>): AstNode.File<TypeData> {
-            return TypeChecker(ast).check()
+        fun check(ast: AstNode.File<Unit>, external: List<Signature> = emptyList()): AstNode.File<TypeData> {
+            return TypeChecker(ast, external.map { null to it }.toMutableList()).check()
         }
     }
 }
