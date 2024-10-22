@@ -79,7 +79,7 @@ primary
     | string
     | Char
     | Boolean
-    | fn=Identifier generic LPAREN (expression (COMMA expression)*)? RPAREN
+    | fn=Identifier generic? LPAREN (expression (COMMA expression)*)? RPAREN
     ;
 
 string

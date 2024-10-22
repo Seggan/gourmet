@@ -10,12 +10,14 @@ import io.github.seggan.gourmet.typing.Type
 import io.github.seggan.gourmet.typing.TypeData
 import io.github.seggan.gourmet.typing.realType
 
-class IrGenerator private constructor() {
+class IrGenerator private constructor(private val ast: AstNode.File<TypeData>) {
 
     private val scopes = ArrayDeque<Scope>()
     private var declaredVariables = ArrayDeque<MutableSet<Variable>>()
 
-    private fun compile(ast: AstNode.File<TypeData>): List<CompiledFunction> {
+    private val functions = ast.functions.map { Signature(it.name, it.realType as Type.Function) }.toSet()
+
+    private fun compile(): List<CompiledFunction> {
         return ast.functions.map(::compileFunction)
     }
 
@@ -34,7 +36,7 @@ class IrGenerator private constructor() {
         }
         val body = compileBlock(function.body, false)
         head then body
-        return CompiledFunction(function.attributes, function.name, ftype, head.first)
+        return CompiledFunction(Signature(function.name, ftype), function.attributes, head.first)
     }
 
     private fun compileBlock(block: AstNode.Block<TypeData>, newScope: Boolean = true): Blocks {
@@ -46,25 +48,25 @@ class IrGenerator private constructor() {
         return blocks then tail
     }
 
-    private fun compileStatements(statements: AstNode.Statements<TypeData>): Blocks {
-        return statements.statements.map(::compileStatement).reduce(Blocks::then)
+    private fun compileStatements(node: AstNode.Statements<TypeData>): Blocks {
+        return node.statements.map(::compileStatement).reduce(Blocks::then)
     }
 
-    private fun compileStatement(statement: AstNode.Statement<TypeData>): Blocks {
-        return when (statement) {
+    private fun compileStatement(node: AstNode.Statement<TypeData>): Blocks {
+        return when (node) {
             is AstNode.Expression -> buildBlock {
-                +compileExpression(statement)
-                repeat(statement.realType.size) {
+                +compileExpression(node)
+                repeat(node.realType.size) {
                     +Insn.Pop()
                 }
             }
-            is AstNode.Assignment -> compileAssignment(statement)
-            is AstNode.Block -> compileBlock(statement)
-            is AstNode.Declaration -> compileDeclaration(statement)
+            is AstNode.Assignment -> compileAssignment(node)
+            is AstNode.Block -> compileBlock(node)
+            is AstNode.Declaration -> compileDeclaration(node)
             is AstNode.DoWhile -> TODO()
             is AstNode.If -> TODO()
-            is AstNode.Return -> compileReturn(statement)
-            is AstNode.Statements -> compileStatements(statement)
+            is AstNode.Return -> compileReturn(node)
+            is AstNode.Statements -> compileStatements(node)
             is AstNode.While -> TODO()
         }
     }
@@ -95,54 +97,76 @@ class IrGenerator private constructor() {
         return block
     }
 
-    private fun compileExpression(expression: AstNode.Expression<TypeData>): Blocks {
-        return when (expression) {
+    private fun compileExpression(node: AstNode.Expression<TypeData>): Blocks {
+        return when (node) {
             is AstNode.BinaryExpression -> buildBlock {
-                +compileExpression(expression.left)
-                +compileExpression(expression.right)
-                +expression.operator.compile()
+                +compileExpression(node.left)
+                +compileExpression(node.right)
+                +node.operator.compile()
             }
 
-            is AstNode.BooleanLiteral -> buildBlock { +Insn.Push(if (expression.value) 1 else 0) }
-            is AstNode.CharLiteral -> buildBlock { +Insn.Push(expression.value.code) }
-            is AstNode.FunctionCall -> TODO()
+            is AstNode.BooleanLiteral -> buildBlock { +Insn.Push(if (node.value) 1 else 0) }
+            is AstNode.CharLiteral -> buildBlock { +Insn.Push(node.value.code) }
+            is AstNode.FunctionCall -> compileCall(node)
             is AstNode.MemberAccess -> TODO()
-            is AstNode.NumberLiteral -> buildBlock { +Insn.Push(expression.value) }
+            is AstNode.NumberLiteral -> buildBlock { +Insn.Push(node.value) }
             is AstNode.StringLiteral -> TODO()
-            is AstNode.UnaryExpression -> when (expression.operator) {
-                UnOp.ASM -> compileAsm(expression)
-                UnOp.SIZEOF -> compileSizeof(expression)
+            is AstNode.UnaryExpression -> when (node.operator) {
+                UnOp.ASM -> compileAsm(node)
+                UnOp.SIZEOF -> compileSizeof(node)
                 else -> buildBlock {
-                    +compileExpression(expression.value)
-                    +expression.operator.compile()
+                    +compileExpression(node.value)
+                    +node.operator.compile()
                 }
             }
             is AstNode.Variable -> buildBlock {
-                val variable = getVariable(expression.name)
-                    ?: throw CompilationException("Variable not found: ${expression.name}", expression.location)
+                val variable = getVariable(node.name)
+                    ?: throw CompilationException("Variable not found: ${node.name}", node.location)
                 +variable.push()
             }
         }
     }
 
-    private fun compileAsm(expression: AstNode.UnaryExpression<TypeData>) = buildBlock {
-        val literal = expression.value
+    private fun compileAsm(node: AstNode.UnaryExpression<TypeData>) = buildBlock {
+        val literal = node.value
         if (literal !is AstNode.StringLiteral) {
-            throw CompilationException("asm requires a string literal", expression.location)
+            throw CompilationException("asm requires a string literal", node.location)
         }
         val value = literal.value
         val mangled = variableReplacementRegex.replace(value) {
             val name = it.groupValues[1]
             val part = it.groupValues.getOrNull(2)?.toIntOrNull() ?: 0
             val variable = getVariable(name)
-                ?: throw CompilationException("Variable not found: $name", expression.location)
+                ?: throw CompilationException("Variable not found: $name", node.location)
             '$' + variable.mapped[part]
         }
         +Insn.raw(mangled)
     }
 
-    private fun compileSizeof(expression: AstNode.UnaryExpression<TypeData>) = buildBlock {
-        +Insn.Push(expression.value.realType.size)
+    private fun compileSizeof(node: AstNode.UnaryExpression<TypeData>) = buildBlock {
+        +Insn.Push(node.value.realType.size)
+    }
+
+    private fun compileCall(node: AstNode.FunctionCall<TypeData>): Blocks {
+        val signature = Signature(node.name, (node.extra as TypeData.FunctionCall).overload)
+        if (signature !in functions) {
+            throw CompilationException("Function not found: ${node.name}", node.location)
+        }
+        val callBlock = buildBlock {
+            for (arg in node.args) {
+                +compileExpression(arg)
+            }
+            for (variable in scopes.flatten()) {
+                +variable.push("callStack")
+            }
+        }
+        val restoreBlock = buildBlock {
+            for (variable in scopes.flatten().reversed()) {
+                +variable.pop("callStack")
+            }
+        }
+        callBlock.second.continuation = Continuation.Call(signature, restoreBlock.first)
+        return callBlock.first to restoreBlock.second
     }
 
     private fun getVariable(name: String): Variable? {
@@ -153,12 +177,6 @@ class IrGenerator private constructor() {
             }
         }
         return null
-    }
-
-    companion object {
-        fun generate(ast: AstNode.File<TypeData>): List<CompiledFunction> {
-            return IrGenerator().compile(ast)
-        }
     }
 
     private inner class BlockBuilder {
@@ -186,7 +204,7 @@ class IrGenerator private constructor() {
         private fun popBlock() {
             val block = BasicBlock(
                 insns,
-                declaredVariables.removeFirst(),
+                declaredVariables.removeFirst().toSet(),
                 mutableSetOf()
             )
             declaredVariables.addFirst(mutableSetOf())
@@ -207,6 +225,12 @@ class IrGenerator private constructor() {
 
     private inline fun buildBlock(init: BlockBuilder.() -> Unit): Blocks {
         return BlockBuilder().apply(init).build()
+    }
+
+    companion object {
+        fun generate(ast: AstNode.File<TypeData>): List<CompiledFunction> {
+            return IrGenerator(ast).compile()
+        }
     }
 }
 

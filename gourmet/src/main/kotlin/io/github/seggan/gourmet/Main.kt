@@ -27,7 +27,7 @@ fun main(args: Array<String>) {
     val compiled = IrGenerator.generate(typedAst)
     val optimized = compiled.map { it.copy(body = BlockOptimizer.optimize(it.body)) }
     val dot = optimized.joinToString("\n") { it.toGraph() }
-    Path("graph.dot").writeText(dot)
+    Path("graph.dot").writeText("digraph G { $dot }")
     Runtime.getRuntime().exec("dot -Tpng graph.dot -o graph.png")
     val asm = IrCompiler.compile(optimized)
     Path("${file.nameWithoutExtension}.recipe").writeText(asm)

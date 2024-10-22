@@ -1,5 +1,7 @@
 package io.github.seggan.gourmet.compilation.ir
 
+import io.github.seggan.gourmet.compilation.Signature
+
 sealed interface Continuation {
 
     data class Direct(val block: BasicBlock) : Continuation {
@@ -19,6 +21,14 @@ sealed interface Continuation {
         }
 
         override fun continuesTo(block: BasicBlock) = then === block || otherwise === block
+    }
+
+    data class Call(val function: Signature, val returnTo: BasicBlock) : Continuation {
+        override fun swap(previous: BasicBlock, new: BasicBlock): Continuation {
+            return if (previous === returnTo) Call(function, new) else this
+        }
+
+        override fun continuesTo(block: BasicBlock) = returnTo === block
     }
 
     data object Return : Continuation {

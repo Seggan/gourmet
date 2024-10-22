@@ -32,7 +32,7 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
     }
 
     override fun visitStatement(ctx: GourmetParser.StatementContext): AstNode.Statement<Unit> {
-        return super.visitStatement(ctx) as AstNode.Statement<Unit>
+        return visit(ctx.getChild(0)) as AstNode.Statement<Unit>
     }
 
     override fun visitDeclaration(ctx: GourmetParser.DeclarationContext): AstNode.Statement<Unit> {
@@ -175,7 +175,7 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
 
             ctx.fn != null -> AstNode.FunctionCall(
                 ctx.fn.text,
-                ctx.generic().type().map(TypeName::parse),
+                ctx.generic()?.type()?.map(TypeName::parse) ?: emptyList(),
                 ctx.expression().map(::visitExpression),
                 ctx.location,
                 Unit
@@ -183,10 +183,6 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
 
             else -> throw AssertionError()
         }
-    }
-
-    override fun aggregateResult(aggregate: AstNode<Unit>?, nextResult: AstNode<Unit>?): AstNode<Unit> {
-        return nextResult ?: aggregate ?: defaultResult()
     }
 }
 

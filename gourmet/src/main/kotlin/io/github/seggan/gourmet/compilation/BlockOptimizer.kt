@@ -21,15 +21,19 @@ class BlockOptimizer private constructor(private val head: BasicBlock) {
                     )
                     movePredecessorsTo(newBlock).optimizeBlock()
                 } else {
-                    cont.block.optimizeBlock()
+                    continuation = cont.copy(block = cont.block.optimizeBlock())
+                    this
                 }
             }
             is Continuation.Conditional -> {
-                val newCont = cont.copy(
+                continuation = cont.copy(
                     then = cont.then.optimizeBlock(),
                     otherwise = cont.otherwise.optimizeBlock()
                 )
-                continuation = newCont
+                this
+            }
+            is Continuation.Call -> {
+                continuation = cont.copy(returnTo = cont.returnTo.optimizeBlock())
                 this
             }
             is Continuation.Return -> this

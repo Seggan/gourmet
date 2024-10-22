@@ -1,15 +1,17 @@
 package io.github.seggan.gourmet.compilation.ir
 
-import io.github.seggan.gourmet.typing.Type
+import io.github.seggan.gourmet.compilation.Signature
+import io.github.seggan.gourmet.typing.TypeData.Empty.type
+import io.github.seggan.gourmet.util.randomString
 
 data class CompiledFunction(
+    val signature: Signature,
     val attributes: Set<String>,
-    val name: String,
-    val type: Type.Function,
     val body: BasicBlock
 )
 
 fun CompiledFunction.toGraph(): String {
+    val returnName = randomString()
     val children = mutableListOf<BasicBlock>()
     body.putChildren(children)
     val nodes = mutableSetOf<String>()
@@ -43,20 +45,21 @@ fun CompiledFunction.toGraph(): String {
                 edges.add("${block.id} -> ${cont.otherwise.id} [label=\"false\"];")
             }
 
-            is Continuation.Return -> edges.add("${block.id} -> return;")
+            is Continuation.Call -> edges.add("${block.id} -> ${cont.returnTo.id} [label=\"call ${cont.function.name}\"];")
+            is Continuation.Return -> edges.add("${block.id} -> $returnName;")
             null -> {}
         }
     }
 
     return buildString {
-        appendLine("digraph $name {")
+        appendLine("subgraph ${signature.name} {")
         appendLine("rankdir=LR;")
-        appendLine("""$name [label="$name ${type.tname}", shape=box];""")
-        appendLine("""return [shape=plaintext];""")
+        appendLine("""${signature.name} [label="${signature.name} ${type.tname}", shape=box];""")
+        appendLine("""$returnName [shape=plaintext, label="return"];""")
         for (node in nodes) {
             appendLine(node)
         }
-        appendLine("""$name -> ${body.id};""")
+        appendLine("""${signature.name} -> ${body.id};""")
         for (edge in edges) {
             appendLine(edge)
         }

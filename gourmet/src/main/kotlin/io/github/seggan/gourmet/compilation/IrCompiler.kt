@@ -12,6 +12,8 @@ class IrCompiler private constructor(private val functions: List<CompiledFunctio
         children
     }
 
+    val entryPoints = functions.associate { it.signature to it.body }
+
     private val blockStates = allBlocks.withIndex().associate { (i, v) -> v.id to i + 1 }
 
     private val hoisted = mutableSetOf<Variable>()
@@ -30,6 +32,7 @@ class IrCompiler private constructor(private val functions: List<CompiledFunctio
         val sb = StringBuilder()
         sb.appendLine("def \$state ${entry.body.state};")
         sb.appendLine("def @returns;")
+        sb.appendLine("def @callStack;")
         for (variable in hoisted) {
             for (part in variable.mapped) {
                 sb.appendLine("def $$part;")
@@ -75,6 +78,12 @@ class IrCompiler private constructor(private val functions: List<CompiledFunctio
 
             is Continuation.Direct -> {
                 sb.appendLine("push ${cont.block.state};")
+                sb.appendLine("pop \$state;")
+            }
+
+            is Continuation.Call -> {
+                sb.appendLine("@returns.push ${cont.returnTo.state};")
+                sb.appendLine("push ${entryPoints[cont.function]!!.state};")
                 sb.appendLine("pop \$state;")
             }
 

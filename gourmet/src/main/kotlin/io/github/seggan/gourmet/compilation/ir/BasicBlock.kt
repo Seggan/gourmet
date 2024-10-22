@@ -20,7 +20,9 @@ data class BasicBlock(
                 cont.then.putChildren(children)
                 cont.otherwise.putChildren(children)
             }
-            else -> return
+            is Continuation.Call -> cont.returnTo.putChildren(children)
+            is Continuation.Return -> {}
+            null -> {}
         }
     }
 }
