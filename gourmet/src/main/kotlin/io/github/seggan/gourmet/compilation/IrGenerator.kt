@@ -57,8 +57,7 @@ class IrGenerator private constructor(
         if (newScope) scopes.addFirst(Scope())
         val blocks = compileStatements(block.statements)
         val dropped = scopes.removeFirst().toSet()
-        val tail = BasicBlock(emptyList(), mutableSetOf(), dropped, blocks.second.continuation)
-        blocks.second.continuation = null
+        val tail = BasicBlock(emptyList(), mutableSetOf(), dropped)
         return blocks then tail
     }
 
@@ -79,7 +78,7 @@ class IrGenerator private constructor(
             is AstNode.Block -> compileBlock(node)
             is AstNode.Declaration -> compileDeclaration(node)
             is AstNode.DoWhile -> TODO()
-            is AstNode.If -> TODO()
+            is AstNode.If -> compileIf(node)
             is AstNode.Return -> compileReturn(node)
             is AstNode.Statements -> compileStatements(node)
             is AstNode.While -> TODO()
@@ -113,10 +112,33 @@ class IrGenerator private constructor(
         }
     }
 
+    private fun compileIf(node: AstNode.If<TypeData>): Blocks {
+        val condition = compileExpression(node.condition)
+        val thenBlock = compileStatement(node.thenBody)
+        val elseBlock = node.elseBody?.let(::compileStatement)
+        val endBlock = buildBlock {}
+        condition.second.continuation = Continuation.Conditional(
+            thenBlock.first,
+            elseBlock?.first ?: endBlock.first
+        )
+        thenBlock then endBlock
+        if (elseBlock != null) {
+            elseBlock then endBlock
+        }
+        return condition.first to endBlock.second
+    }
+
     private fun compileReturn(node: AstNode.Return<TypeData>): Blocks {
-        val block = buildBlock { /* TODO */ }
-        block.second.continuation = Continuation.Return
-        return block
+        val block = buildBlock {
+            if (node.value != null) {
+                +compileExpression(node.value)
+            } else {
+                +Insn.Push(0)
+            }
+        }
+        val dropBlock = BasicBlock(emptyList(), mutableSetOf(), scopes.flatten().toSet(), Continuation.Return)
+        block.second.continuation = Continuation.Direct(dropBlock)
+        return block.first to dropBlock
     }
 
     private fun compileExpression(node: AstNode.Expression<TypeData>): Blocks {

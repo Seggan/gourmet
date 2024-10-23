@@ -36,10 +36,9 @@ private fun getIr(
     external: List<CompiledFunction> = emptyList(),
     removeUnused: Boolean = true
 ): List<CompiledFunction> {
-    val stream = CommonTokenStream(GourmetLexer(CharStreams.fromStream(file)))
-    val parsed = GourmetParser(stream).file()
     Location.currentFile = fileName
-    val ast = GourmetVisitor.visitFile(parsed)
+    val parser = GourmetParser(CommonTokenStream(GourmetLexer(CharStreams.fromStream(file))))
+    val ast = GourmetVisitor.visitFile(parser.file())
     val typedAst = TypeChecker.check(ast, external.map { it.signature })
     val compiled = IrGenerator.generate(typedAst, external, removeUnused)
     return compiled.map { it.copy(body = BlockOptimizer.optimize(it.body)) }

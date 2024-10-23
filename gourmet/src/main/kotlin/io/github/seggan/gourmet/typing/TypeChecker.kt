@@ -19,6 +19,8 @@ class TypeChecker private constructor(
 
     private val scopes = ArrayDeque<MutableList<Pair<String, Type>>>()
 
+    private lateinit var currentFunction: Signature
+
     init {
         functions += ast.functions.map { node ->
             val args = node.args.map { it.second.resolve(node.location) }
@@ -34,8 +36,8 @@ class TypeChecker private constructor(
     }
 
     private fun checkFunction(node: AstNode.Function<Unit>): AstNode.Function<TypeData> {
-        val type = functions.first { it.first == node }.second.type
-        val args = node.args.unzip().first.zip(type.args)
+        currentFunction = functions.first { it.first == node }.second
+        val args = node.args.unzip().first.zip(currentFunction.type.args)
         scopes.addFirst(args.toMutableList())
         val block = checkBlock(node.body)
         scopes.removeFirst()
@@ -46,7 +48,7 @@ class TypeChecker private constructor(
             node.returnType,
             block,
             node.location,
-            TypeData.Basic(type)
+            TypeData.Basic(currentFunction.type)
         )
     }
 
@@ -104,7 +106,7 @@ class TypeChecker private constructor(
     private fun checkReturn(node: AstNode.Return<Unit>): AstNode.Return<TypeData> {
         val value = node.value?.let(::checkExpression)
         val valueType = value?.realType ?: Type.Unit
-        val returnType = functions.last().second.type.returnType
+        val returnType = currentFunction.type.returnType
         if (!valueType.isAssignableTo(returnType)) {
             throw TypeException(
                 "Cannot return $valueType from function with return type $returnType",

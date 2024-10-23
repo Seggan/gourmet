@@ -16,9 +16,18 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
         val args = ctx.parameter().map { it.Identifier().text to TypeName.parse(it.type()) }
         val returnType = ctx.type()?.let(TypeName::parse)
         var block = visitBlock(ctx.block())
-        if (block.statements.lastOrNull() !is AstNode.Return) {
-            val newStatements = block.statements + AstNode.Return(null, ctx.location, Unit)
-            block = block.copy(statements = block.statements.copy(statements = newStatements))
+        if (!returns(block)) {
+            val location = ctx.location
+            if (returnType == null || returnType == TypeName.Simple("Unit")) {
+                val newStatements = block.statements + AstNode.Return(null, location, Unit)
+                block = block.copy(statements = block.statements.copy(statements = newStatements))
+            } else {
+                throw SyntaxException(
+                    "Function does not return in all code paths",
+                    location.row,
+                    location.column
+                )
+            }
         }
         return AstNode.Function(attributes, name, args, returnType, block, ctx.location, Unit)
     }
@@ -214,6 +223,7 @@ private fun unescapeString(str: String): String {
                         i += 4
                         code
                     }
+
                     '"' -> '"'
                     else -> next
                 }
@@ -225,4 +235,26 @@ private fun unescapeString(str: String): String {
         }
     }
     return builder.toString()
+}
+
+private fun returns(statement: AstNode.Statement<Unit>): Boolean {
+    return when (statement) {
+        is AstNode.Assignment -> false
+        is AstNode.Block -> returns(statement.statements)
+        is AstNode.Declaration -> false
+        is AstNode.DoWhile -> returns(statement.body)
+        is AstNode.BinaryExpression -> false
+        is AstNode.BooleanLiteral -> false
+        is AstNode.CharLiteral -> false
+        is AstNode.FunctionCall -> false
+        is AstNode.MemberAccess -> false
+        is AstNode.NumberLiteral -> false
+        is AstNode.StringLiteral -> false
+        is AstNode.UnaryExpression -> false
+        is AstNode.Variable -> false
+        is AstNode.If -> returns(statement.thenBody) && (statement.elseBody?.let(::returns) ?: true)
+        is AstNode.Return -> true
+        is AstNode.Statements -> statement.lastOrNull()?.let(::returns) ?: false
+        is AstNode.While -> returns(statement.body)
+    }
 }
