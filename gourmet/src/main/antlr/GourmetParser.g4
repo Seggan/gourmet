@@ -23,24 +23,21 @@ parameter
     ;
 
 block
-    : LBRACE statements? RBRACE
-    ;
-
-statements
-    : statement+
+    : LBRACE statement* RBRACE
     ;
 
 statement
-    : (expression SEMICOLON) | declaration | assignment | block | if | doWhile | while | for | return
+    : ((expression | declaration | assignment | return) SEMICOLON)
+    | block | if | doWhile | while | for
     ;
 
 declaration
-    : LET Identifier (((COLON type)? ASSIGN expression) | COLON type) SEMICOLON
+    : LET Identifier (((COLON type)? ASSIGN expression) | COLON type)
     ;
 
 assignment
     : Identifier assignType=(ASSIGN | PLUS_ASSIGN | MINUS_ASSIGN | MULT_ASSIGN | DIV_ASSIGN | MOD_ASSIGN)
-     expression SEMICOLON
+     expression
     ;
 
 if
@@ -56,11 +53,11 @@ doWhile
     ;
 
 for
-    : FOR LPAREN (declaration | init=assignment)? SEMICOLON cond=expression? SEMICOLON (update=assignment)? RPAREN statement
+    : FOR LPAREN (declaration | init=assignment)? SEMICOLON cond=expression? SEMICOLON update=assignment? RPAREN body=statement
     ;
 
 return
-    : RETURN expression? SEMICOLON
+    : RETURN expression?
     ;
 
 expression

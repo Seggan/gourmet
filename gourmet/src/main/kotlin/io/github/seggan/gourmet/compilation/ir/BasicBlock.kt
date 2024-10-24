@@ -34,4 +34,11 @@ data class BasicBlock(
             null -> {}
         }
     }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        return other is BasicBlock && other.id == id
+    }
+
+    override fun hashCode(): Int = id.hashCode()
 }

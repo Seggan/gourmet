@@ -1,5 +1,30 @@
 macro nop { exec {}; }
 
+macro copy src dest {
+    push src;
+    pop dest;
+}
+
+macro clone reg {
+    pop reg;
+    push reg;
+}
+
+macro dup {
+    def $temp;
+    clone $temp;
+    push $temp;
+    del $temp;
+}
+
+macro pop { pop $null; }
+
+macro def var init {
+    def var;
+    push init;
+    pop var;
+}
+
 macro inc reg {
     push reg;
     add 1;
@@ -38,22 +63,22 @@ macro pow y {
     };
 }
 
-macro sign x {
-    ifelse x {
+macro sign {
+    dup;
+    if {
+        def $tempSign;
+        pop $tempSign;
         def @tempSign;
         @tempSign.exec {
             neg 1;
             push 1;
-            rot x;
+            rot $tempSign;
             pop;
-            def $tempSign;
             pop $tempSign;
         };
         push $tempSign;
         del $tempSign;
         undef @tempSign;
-    } {
-        push 0;
     };
 }
 
@@ -68,23 +93,16 @@ macro eq y {
 }
 
 macro gt y {
-    def $tempGt;
     sub y;
-    pop $tempGt;
-    sign $tempGt;
-    del $tempGt;
+    sign;
     eq 1;
 }
 
 macro lt y {
-    def $tempLt;
     sub y;
-    pop $tempLt;
-    sign $tempLt;
-    pop $tempLt;
+    sign;
     neg 1;
-    eq $tempLt;
-    del $tempLt;
+    eq { nop; };
 }
 
 macro not bool {
@@ -120,50 +138,18 @@ macro bool val {
 macro and reg { mul reg; }
 
 macro or reg {
-    def $tempOr;
     add reg;
-    pop $tempOr;
-    bool $tempOr;
-    del $tempOr;
+    bool { nop; };
 }
 
 macro if cond block { while cond { exec block; break; }; }
 
 macro if block { while { exec block; break; }; }
 
-macro ifelse cond true false {
-    if cond true;
-    if { not cond; } false;
-}
-
 macro ifelse true false {
     def $tempIfElse;
     pop $tempIfElse;
-    ifelse $tempIfElse true false;
-    del $tempIfElse;
-}
-
-macro copy src dest {
-    push src;
-    pop dest;
-}
-
-macro clone reg {
-    pop reg;
-    push reg;
-}
-
-macro dup {
-    def $temp;
-    clone $temp;
-    push $temp;
-    del $temp;
-}
-
-macro pop { pop $null; }
-
-macro def var init {
-    def var;
-    push init;
-    pop var;
+    if $tempIfElse true;
+    not $tempIfElse;
+    if false;
 }

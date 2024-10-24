@@ -43,7 +43,7 @@ enum class UnOp(private val token: Int) {
     ASM(GourmetParser.ASM) {
         override fun checkType(arg: Type, location: Location): Type {
             if (arg.isAssignableTo(Type.STRING)) {
-                return Type.Never
+                return Type.Nothing
             }
             throw TypeException("Expected String, got $arg", location)
         }

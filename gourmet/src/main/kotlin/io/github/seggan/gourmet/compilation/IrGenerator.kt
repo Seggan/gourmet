@@ -55,14 +55,12 @@ class IrGenerator private constructor(
 
     private fun compileBlock(block: AstNode.Block<TypeData>, newScope: Boolean = true): Blocks {
         if (newScope) scopes.addFirst(Scope())
-        val blocks = compileStatements(block.statements)
+        val blocks = block.statements.fold(buildBlock {}) { acc, statement ->
+            acc then compileStatement(statement)
+        }
         val dropped = scopes.removeFirst().toSet()
-        val tail = BasicBlock(emptyList(), mutableSetOf(), dropped)
+        val tail = BasicBlock(emptyList(), emptySet(), dropped)
         return blocks then tail
-    }
-
-    private fun compileStatements(node: AstNode.Statements<TypeData>): Blocks {
-        return node.statements.map(::compileStatement).reduce(Blocks::then)
     }
 
     private fun compileStatement(node: AstNode.Statement<TypeData>): Blocks {
@@ -77,11 +75,11 @@ class IrGenerator private constructor(
             is AstNode.Assignment -> compileAssignment(node)
             is AstNode.Block -> compileBlock(node)
             is AstNode.Declaration -> compileDeclaration(node)
-            is AstNode.DoWhile -> TODO()
+            is AstNode.DoWhile -> compileDoWhile(node)
+            is AstNode.For -> compileFor(node)
             is AstNode.If -> compileIf(node)
             is AstNode.Return -> compileReturn(node)
-            is AstNode.Statements -> compileStatements(node)
-            is AstNode.While -> TODO()
+            is AstNode.While -> compileWhile(node)
         }
     }
 
@@ -128,6 +126,43 @@ class IrGenerator private constructor(
         return condition.first to endBlock.second
     }
 
+    private fun compileDoWhile(node: AstNode.DoWhile<TypeData>): Blocks {
+        val body = compileStatement(node.body)
+        val condition = compileExpression(node.condition)
+        val endBlock = BasicBlock(emptyList(), emptySet(), emptySet())
+        body then condition
+        condition.second.continuation = Continuation.Conditional(body.first, endBlock)
+        return body.first to endBlock
+    }
+
+    private fun compileWhile(node: AstNode.While<TypeData>): Blocks {
+        val condition = compileExpression(node.condition)
+        val body = compileStatement(node.body)
+        val endBlock = buildBlock {}
+        condition.second.continuation = Continuation.Conditional(body.first, endBlock.first)
+        body then condition
+        return condition.first to endBlock.second
+    }
+
+    private fun compileFor(node: AstNode.For<TypeData>): Blocks {
+        scopes.addFirst(Scope())
+        val init = node.init?.let(::compileStatement)
+        val condition = compileExpression(node.condition)
+        val update = node.update?.let(::compileStatement)
+        val body = compileStatement(node.body)
+        val endBlock = BasicBlock(emptyList(), emptySet(), scopes.removeFirst().toSet())
+        if (init != null) {
+            init then condition
+        }
+        condition.second.continuation = Continuation.Conditional(body.first, endBlock)
+        if (update != null) {
+            body then update then condition
+        } else {
+            body then condition
+        }
+        return (init?.first ?: condition.first) to endBlock
+    }
+
     private fun compileReturn(node: AstNode.Return<TypeData>): Blocks {
         val block = buildBlock {
             if (node.value != null) {
@@ -136,7 +171,7 @@ class IrGenerator private constructor(
                 +Insn.Push(0)
             }
         }
-        val dropBlock = BasicBlock(emptyList(), mutableSetOf(), scopes.flatten().toSet(), Continuation.Return)
+        val dropBlock = BasicBlock(emptyList(), emptySet(), scopes.flatten().toSet(), Continuation.Return)
         block.second.continuation = Continuation.Direct(dropBlock)
         return block.first to dropBlock
     }
@@ -266,7 +301,7 @@ class IrGenerator private constructor(
             val block = BasicBlock(
                 insns,
                 declaredVariables.removeFirst().toSet(),
-                mutableSetOf()
+                emptySet()
             )
             declaredVariables.addFirst(mutableSetOf())
             blocks = if (::blocks.isInitialized) {

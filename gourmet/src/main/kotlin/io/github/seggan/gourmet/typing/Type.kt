@@ -19,8 +19,8 @@ sealed interface Type {
         }
     }
 
-    data object Never : Type {
-        override val tname = "Never"
+    data object Nothing : Type {
+        override val tname = "Nothing"
         override val size = 0
 
         override fun isAssignableTo(other: Type): Boolean {
@@ -34,7 +34,7 @@ sealed interface Type {
 
     data object Unit : Type {
         override val tname = "Unit"
-        override val size = 0
+        override val size = 1
 
         override fun fillGeneric(generic: Type, type: Type): Type {
             return this

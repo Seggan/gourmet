@@ -42,4 +42,5 @@ private fun getIr(
     val typedAst = TypeChecker.check(ast, external.map { it.signature })
     val compiled = IrGenerator.generate(typedAst, external, removeUnused)
     return compiled.map { it.copy(body = BlockOptimizer.optimize(it.body)) }
+    //return compiled
 }

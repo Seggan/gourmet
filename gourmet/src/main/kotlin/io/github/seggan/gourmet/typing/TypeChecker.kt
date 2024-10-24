@@ -14,7 +14,7 @@ class TypeChecker private constructor(
         Type.Primitive.CHAR,
         Type.Primitive.NUMBER,
         Type.Unit,
-        Type.Never
+        Type.Nothing
     ).associateBy { it.tname }
 
     private val scopes = ArrayDeque<MutableList<Pair<String, Type>>>()
@@ -54,13 +54,9 @@ class TypeChecker private constructor(
 
     private fun checkBlock(node: AstNode.Block<Unit>): AstNode.Block<TypeData> {
         scopes.addFirst(mutableListOf())
-        val statements = checkStatements(node.statements)
+        val statements = node.statements.map(::checkStatement)
         scopes.removeFirst()
         return AstNode.Block(statements, node.location, TypeData.Empty)
-    }
-
-    private fun checkStatements(node: AstNode.Statements<Unit>): AstNode.Statements<TypeData> {
-        return AstNode.Statements(node.statements.map(::checkStatement), node.location, TypeData.Empty)
     }
 
     private fun checkStatement(node: AstNode.Statement<Unit>): AstNode.Statement<TypeData> {
@@ -70,9 +66,9 @@ class TypeChecker private constructor(
             is AstNode.Return -> checkReturn(node)
             is AstNode.Block -> checkBlock(node)
             is AstNode.If -> checkIf(node)
-            is AstNode.Statements -> checkStatements(node)
             is AstNode.DoWhile -> checkDoWhile(node)
             is AstNode.While -> checkWhile(node)
+            is AstNode.For -> checkFor(node)
             is AstNode.Expression -> checkExpression(node)
         }
     }
@@ -118,7 +114,7 @@ class TypeChecker private constructor(
 
     private fun checkIf(node: AstNode.If<Unit>): AstNode.If<TypeData> {
         val condition = checkExpression(node.condition)
-        if (condition.realType != Type.Primitive.BOOLEAN) {
+        if (!condition.realType.isAssignableTo(Type.Primitive.BOOLEAN)) {
             throw TypeException("Condition must be a boolean", condition.location)
         }
         val thenBlock = checkStatement(node.thenBody)
@@ -128,7 +124,7 @@ class TypeChecker private constructor(
 
     private fun checkWhile(node: AstNode.While<Unit>): AstNode.While<TypeData> {
         val condition = checkExpression(node.condition)
-        if (condition.realType != Type.Primitive.BOOLEAN) {
+        if (!condition.realType.isAssignableTo(Type.Primitive.BOOLEAN)) {
             throw TypeException("Condition must be a boolean", condition.location)
         }
         val block = checkStatement(node.body)
@@ -138,10 +134,21 @@ class TypeChecker private constructor(
     private fun checkDoWhile(node: AstNode.DoWhile<Unit>): AstNode.DoWhile<TypeData> {
         val block = checkStatement(node.body)
         val condition = checkExpression(node.condition)
-        if (condition.realType != Type.Primitive.BOOLEAN) {
+        if (!condition.realType.isAssignableTo(Type.Primitive.BOOLEAN)) {
             throw TypeException("Condition must be a boolean", condition.location)
         }
         return AstNode.DoWhile(block, condition, node.location, TypeData.Empty)
+    }
+
+    private fun checkFor(node: AstNode.For<Unit>): AstNode.For<TypeData> {
+        val init = node.init?.let(::checkStatement)
+        val condition = checkExpression(node.condition)
+        if (!condition.realType.isAssignableTo(Type.Primitive.BOOLEAN)) {
+            throw TypeException("Condition must be a boolean", condition.location)
+        }
+        val update = node.update?.let(::checkStatement)
+        val block = checkStatement(node.body)
+        return AstNode.For(init, condition, update, block, node.location, TypeData.Empty)
     }
 
     private fun checkExpression(node: AstNode.Expression<Unit>): AstNode.Expression<TypeData> {

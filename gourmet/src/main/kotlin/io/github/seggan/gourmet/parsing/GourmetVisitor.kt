@@ -20,7 +20,7 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
             val location = ctx.location
             if (returnType == null || returnType == TypeName.Simple("Unit")) {
                 val newStatements = block.statements + AstNode.Return(null, location, Unit)
-                block = block.copy(statements = block.statements.copy(statements = newStatements))
+                block = block.copy(statements = newStatements)
             } else {
                 throw SyntaxException(
                     "Function does not return in all code paths",
@@ -33,11 +33,7 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
     }
 
     override fun visitBlock(ctx: GourmetParser.BlockContext): AstNode.Block<Unit> {
-        return AstNode.Block(visitStatements(ctx.statements()), ctx.location, Unit)
-    }
-
-    override fun visitStatements(ctx: GourmetParser.StatementsContext): AstNode.Statements<Unit> {
-        return AstNode.Statements(ctx.statement().map(::visit).flatMap(::flattenStatements), ctx.location, Unit)
+        return AstNode.Block(ctx.statement().map(::visitStatement), ctx.location, Unit)
     }
 
     override fun visitStatement(ctx: GourmetParser.StatementContext): AstNode.Statement<Unit> {
@@ -71,24 +67,13 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
     }
 
     override fun visitFor(ctx: GourmetParser.ForContext): AstNode.Statement<Unit> {
-        val init = if (ctx.declaration() != null) {
-            visitDeclaration(ctx.declaration())
-        } else if (ctx.init != null) {
-            visitAssignment(ctx.init)
-        } else {
-            null
-        }
+        val init = ctx.declaration()?.let(::visitDeclaration) ?: ctx.init?.let(::visitAssignment)
         val condition = ctx.cond?.let(::visitExpression) ?: AstNode.BooleanLiteral(true, ctx.location, Unit)
-        var block = visitStatement(ctx.statement())
-        if (ctx.update != null) {
-            block = AstNode.Block(
-                AstNode.Statements(listOf(block, visitAssignment(ctx.update)), block.location, Unit),
-                block.location,
-                Unit
-            )
-        }
-        return AstNode.Statements(
-            listOfNotNull(init, AstNode.While(condition, block, ctx.location, Unit)),
+        return AstNode.For(
+            init,
+            condition,
+            ctx.update?.let(::visitAssignment),
+            visitStatement(ctx.body),
             ctx.location,
             Unit
         )
@@ -196,14 +181,6 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
     }
 }
 
-private fun flattenStatements(node: AstNode<Unit>): List<AstNode.Statement<Unit>> {
-    return when (node) {
-        is AstNode.Statements -> node.statements.flatMap(::flattenStatements)
-        is AstNode.Statement -> listOf(node)
-        else -> error("Unexpected node type: $node")
-    }
-}
-
 private fun unescapeString(str: String): String {
     val builder = StringBuilder()
     var i = 0
@@ -240,12 +217,13 @@ private fun unescapeString(str: String): String {
 private fun returns(statement: AstNode.Statement<Unit>): Boolean {
     return when (statement) {
         is AstNode.Assignment -> false
-        is AstNode.Block -> returns(statement.statements)
+        is AstNode.Block -> statement.statements.lastOrNull()?.let(::returns) ?: false
         is AstNode.Declaration -> false
         is AstNode.DoWhile -> returns(statement.body)
         is AstNode.BinaryExpression -> false
         is AstNode.BooleanLiteral -> false
         is AstNode.CharLiteral -> false
+        is AstNode.For -> returns(statement.body)
         is AstNode.FunctionCall -> false
         is AstNode.MemberAccess -> false
         is AstNode.NumberLiteral -> false
@@ -254,7 +232,6 @@ private fun returns(statement: AstNode.Statement<Unit>): Boolean {
         is AstNode.Variable -> false
         is AstNode.If -> returns(statement.thenBody) && (statement.elseBody?.let(::returns) ?: true)
         is AstNode.Return -> true
-        is AstNode.Statements -> statement.lastOrNull()?.let(::returns) ?: false
         is AstNode.While -> returns(statement.body)
     }
 }

@@ -26,14 +26,8 @@ sealed interface AstNode<T> {
 
     sealed interface Statement<T> : AstNode<T>
 
-    data class Statements<T>(
-        val statements: List<Statement<T>>,
-        override val location: Location,
-        override val extra: T
-    ) : Statement<T>, List<Statement<T>> by statements
-
     data class Block<T>(
-        val statements: Statements<T>,
+        val statements: List<Statement<T>>,
         override val location: Location,
         override val extra: T
     ) : Statement<T>
@@ -64,6 +58,15 @@ sealed interface AstNode<T> {
         val condition: Expression<T>,
         val thenBody: Statement<T>,
         val elseBody: Statement<T>?,
+        override val location: Location,
+        override val extra: T
+    ) : Statement<T>
+
+    data class For<T>(
+        val init: Statement<T>?,
+        val condition: Expression<T>,
+        val update: Statement<T>?,
+        val body: Statement<T>,
         override val location: Location,
         override val extra: T
     ) : Statement<T>
