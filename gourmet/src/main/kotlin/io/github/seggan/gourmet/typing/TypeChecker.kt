@@ -1,12 +1,13 @@
 package io.github.seggan.gourmet.typing
 
+import io.github.seggan.gourmet.compilation.CompiletimeFunction
 import io.github.seggan.gourmet.parsing.AstNode
 import io.github.seggan.gourmet.parsing.TypeName
 import io.github.seggan.gourmet.util.Location
 
 class TypeChecker private constructor(
     private val ast: AstNode.File<Unit>,
-    private val functions: MutableList<Pair<AstNode.Function<Unit>?, Signature>>
+    private val functions: MutableSet<Pair<AstNode.Function<Unit>?, Signature>>
 ) {
 
     private val types = listOf(
@@ -14,7 +15,8 @@ class TypeChecker private constructor(
         Type.Primitive.CHAR,
         Type.Primitive.NUMBER,
         Type.Unit,
-        Type.Nothing
+        Type.Nothing,
+        Type.STRING
     ).associateBy { it.tname }
 
     private val scopes = ArrayDeque<MutableList<Pair<String, Type>>>()
@@ -22,6 +24,7 @@ class TypeChecker private constructor(
     private lateinit var currentFunction: Signature
 
     init {
+        functions += CompiletimeFunction.entries.map { null to it.signature }
         functions += ast.functions.map { node ->
             val args = node.args.map { it.second.resolve(node.location) }
             val returnType = node.returnType?.resolve(node.location) ?: Type.Unit
@@ -79,7 +82,7 @@ class TypeChecker private constructor(
             ?: value?.realType
             ?: throw TypeException("Cannot infer type of declaration", node.location)
         if (value != null && !value.realType.isAssignableTo(type)) {
-            throw TypeException("Cannot assign ${value.extra} to $type", node.location)
+            throw TypeException("Cannot assign ${value.realType} to $type", node.location)
         }
         scopes.first().add(node.name to type)
         return AstNode.Declaration(node.name, node.type, value, node.location, TypeData.Basic(type))
@@ -91,7 +94,7 @@ class TypeChecker private constructor(
         val assignOp = node.assignType.op
         if (assignOp == null) {
             if (!value.realType.isAssignableTo(type)) {
-                throw TypeException("Cannot assign ${value.extra} to $type", node.location)
+                throw TypeException("Cannot assign ${value.realType} to $type", node.location)
             }
         } else {
             assignOp.checkType(type, value.realType, node.location)
@@ -222,14 +225,14 @@ class TypeChecker private constructor(
             for ((generic, provided) in type.genericArgs.zip(node.genericArgs)) {
                 type = type.fillGeneric(generic, provided.resolve(node.location)) as Type.Function
             }
-            if (type.genericArgs.isNotEmpty()) {
+            if (type.genericArgs.any { it is Type.Generic }) {
                 exception = TypeException("Generic arguments not fully resolved", node.location)
                 continue
             }
             val args = node.args.map(::checkExpression)
             for ((arg, provided) in type.args.zip(args)) {
                 if (!provided.realType.isAssignableTo(arg)) {
-                    exception = TypeException("Cannot assign ${provided.extra} to $arg", provided.location)
+                    exception = TypeException("Cannot assign ${provided.realType} to $arg", provided.location)
                     continue@outer
                 }
             }
@@ -238,7 +241,7 @@ class TypeChecker private constructor(
                 node.genericArgs,
                 args,
                 node.location,
-                TypeData.FunctionCall(type.returnType, function)
+                TypeData.FunctionCall(type.returnType, type, function)
             )
         }
         throw exception
@@ -274,7 +277,7 @@ class TypeChecker private constructor(
 
     companion object {
         fun check(ast: AstNode.File<Unit>, external: List<Signature> = emptyList()): AstNode.File<TypeData> {
-            return TypeChecker(ast, external.map { null to it }.toMutableList()).check()
+            return TypeChecker(ast, external.map { null to it }.toMutableSet()).check()
         }
     }
 }

@@ -63,7 +63,7 @@ return
 expression
     : primary
     | expression DOT Identifier
-    | prefixOp=(NOT | MINUS | STAR | ASM | SIZEOF) expression
+    | prefixOp=(NOT | MINUS | STAR) expression
     | expression op=(STAR | SLASH | PERCENT) expression
     | expression op=(PLUS | MINUS) expression
     | expression op=(EQ | NE | LT | LE | GT | GE) expression

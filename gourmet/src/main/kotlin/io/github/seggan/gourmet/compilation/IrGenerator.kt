@@ -5,7 +5,6 @@ import io.github.seggan.gourmet.compilation.ir.CompiledFunction
 import io.github.seggan.gourmet.compilation.ir.Continuation
 import io.github.seggan.gourmet.compilation.ir.Insn
 import io.github.seggan.gourmet.parsing.AstNode
-import io.github.seggan.gourmet.parsing.UnOp
 import io.github.seggan.gourmet.typing.Signature
 import io.github.seggan.gourmet.typing.Type
 import io.github.seggan.gourmet.typing.TypeData
@@ -176,7 +175,7 @@ class IrGenerator private constructor(
         return block.first to dropBlock
     }
 
-    private fun compileExpression(node: AstNode.Expression<TypeData>): Blocks {
+    fun compileExpression(node: AstNode.Expression<TypeData>): Blocks {
         return when (node) {
             is AstNode.BinaryExpression -> buildBlock {
                 +compileExpression(node.left)
@@ -190,13 +189,9 @@ class IrGenerator private constructor(
             is AstNode.MemberAccess -> TODO()
             is AstNode.NumberLiteral -> buildBlock { +Insn.Push(node.value) }
             is AstNode.StringLiteral -> TODO()
-            is AstNode.UnaryExpression -> when (node.operator) {
-                UnOp.ASM -> compileAsm(node)
-                UnOp.SIZEOF -> compileSizeof(node)
-                else -> buildBlock {
-                    +compileExpression(node.value)
-                    +node.operator.compile()
-                }
+            is AstNode.UnaryExpression -> buildBlock {
+                +compileExpression(node.value)
+                +node.operator.compile()
             }
 
             is AstNode.Variable -> buildBlock {
@@ -207,28 +202,12 @@ class IrGenerator private constructor(
         }
     }
 
-    private fun compileAsm(node: AstNode.UnaryExpression<TypeData>) = buildBlock {
-        val literal = node.value
-        if (literal !is AstNode.StringLiteral) {
-            throw CompilationException("asm requires a string literal", node.location)
-        }
-        val value = literal.value
-        val mangled = variableReplacementRegex.replace(value) {
-            val name = it.groupValues[1]
-            val part = it.groupValues.getOrNull(2)?.toIntOrNull() ?: 0
-            val variable = getVariable(name)
-                ?: throw CompilationException("Variable not found: $name", node.location)
-            '$' + variable.mapped[part]
-        }
-        +Insn.raw(mangled)
-    }
-
-    private fun compileSizeof(node: AstNode.UnaryExpression<TypeData>) = buildBlock {
-        +Insn.Push(node.value.realType.size)
-    }
-
     private fun compileCall(node: AstNode.FunctionCall<TypeData>): Blocks {
         val signature = (node.extra as TypeData.FunctionCall).overload
+        val compiletime = CompiletimeFunction.entries.firstOrNull { it.signature == signature }
+        if (compiletime != null) {
+            return with(compiletime) { compile(node) }
+        }
         if (signature !in functions) {
             throw CompilationException("Function not found: ${node.name}", node.location)
         }
@@ -265,7 +244,7 @@ class IrGenerator private constructor(
         }
     }
 
-    private fun getVariable(name: String): Variable? {
+    fun getVariable(name: String): Variable? {
         for (scope in scopes) {
             val variable = scope.find { it.name == name }
             if (variable != null) {
@@ -275,7 +254,7 @@ class IrGenerator private constructor(
         return null
     }
 
-    private inner class BlockBuilder {
+    inner class BlockBuilder {
         private var insns = mutableListOf<Insn>()
 
         private lateinit var blocks: Blocks
@@ -319,7 +298,7 @@ class IrGenerator private constructor(
         }
     }
 
-    private inline fun buildBlock(init: BlockBuilder.() -> Unit): Blocks {
+    inline fun buildBlock(init: BlockBuilder.() -> Unit): Blocks {
         return BlockBuilder().apply(init).build()
     }
 
@@ -334,9 +313,9 @@ class IrGenerator private constructor(
     }
 }
 
-private typealias Blocks = Pair<BasicBlock, BasicBlock>
+typealias Blocks = Pair<BasicBlock, BasicBlock>
 
-private infix fun Blocks.then(block: BasicBlock): Blocks {
+infix fun Blocks.then(block: BasicBlock): Blocks {
     if (second.continuation == null) {
         second.continuation = Continuation.Direct(block)
         return first to block
@@ -345,7 +324,7 @@ private infix fun Blocks.then(block: BasicBlock): Blocks {
     }
 }
 
-private infix fun Blocks.then(blocks: Blocks): Blocks {
+infix fun Blocks.then(blocks: Blocks): Blocks {
     if (second.continuation == null) {
         second.continuation = Continuation.Direct(blocks.first)
         return first to blocks.second
@@ -353,5 +332,3 @@ private infix fun Blocks.then(blocks: Blocks): Blocks {
         return this
     }
 }
-
-private val variableReplacementRegex = Regex("""\[([a-zA-Z_][a-zA-Z0-9_]*)(?::(\d+))?]""")

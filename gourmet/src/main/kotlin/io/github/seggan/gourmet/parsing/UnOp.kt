@@ -39,23 +39,6 @@ enum class UnOp(private val token: Int) {
         }
 
         override fun compile() = TODO()
-    },
-    ASM(GourmetParser.ASM) {
-        override fun checkType(arg: Type, location: Location): Type {
-            if (arg.isAssignableTo(Type.STRING)) {
-                return Type.Nothing
-            }
-            throw TypeException("Expected String, got $arg", location)
-        }
-
-        override fun compile() = throw AssertionError("asm is compiled separately")
-    },
-    SIZEOF(GourmetParser.SIZEOF) {
-        override fun checkType(arg: Type, location: Location): Type {
-            return Type.Primitive.NUMBER
-        }
-
-        override fun compile() = throw AssertionError("sizeof is compiled separately")
     };
 
     abstract fun checkType(arg: Type, location: Location): Type

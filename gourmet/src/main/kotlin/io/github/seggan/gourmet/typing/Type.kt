@@ -17,6 +17,8 @@ sealed interface Type {
         override fun fillGeneric(generic: Type, type: Type): Type {
             return this
         }
+
+        override fun toString(): String = tname
     }
 
     data object Nothing : Type {
@@ -30,6 +32,8 @@ sealed interface Type {
         override fun fillGeneric(generic: Type, type: Type): Type {
             return this
         }
+
+        override fun toString(): String = tname
     }
 
     data object Unit : Type {
@@ -39,6 +43,8 @@ sealed interface Type {
         override fun fillGeneric(generic: Type, type: Type): Type {
             return this
         }
+
+        override fun toString(): String = tname
     }
 
     data class Pointer(val target: Type) : Type {
@@ -55,6 +61,8 @@ sealed interface Type {
         override fun fillGeneric(generic: Type, type: Type): Type {
             return Pointer(target.fillGeneric(generic, type))
         }
+
+        override fun toString(): String = tname
     }
 
     data class Structure(override val tname: String, val fields: List<Pair<String, Type>>) : Type {
@@ -63,6 +71,8 @@ sealed interface Type {
         override fun fillGeneric(generic: Type, type: Type): Type {
             return Structure(tname, fields.map { (name, type) -> name to type.fillGeneric(generic, type) })
         }
+
+        override fun toString(): String = tname
     }
 
     data class Generic(override val tname: String) : Type {
@@ -80,11 +90,13 @@ sealed interface Type {
 
         override fun fillGeneric(generic: Type, type: Type): Type {
             return Function(
-                genericArgs.filterNot { it == generic }.map { it.fillGeneric(generic, type) },
+                genericArgs.map { it.fillGeneric(generic, type) },
                 args.map { it.fillGeneric(generic, type) },
                 returnType.fillGeneric(generic, type)
             )
         }
+
+        override fun toString(): String = tname
     }
 
     fun isAssignableTo(other: Type): Boolean {

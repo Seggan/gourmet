@@ -29,9 +29,6 @@ BREAK: 'break';
 CONTINUE: 'continue';
 RETURN: 'return';
 
-ASM: 'asm';
-SIZEOF: 'sizeof';
-
 LPAREN: '(';
 RPAREN: ')';
 LBRACE: '{';

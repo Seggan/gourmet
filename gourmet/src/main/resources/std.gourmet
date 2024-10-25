@@ -1,15 +1,24 @@
 @inline
 fun print(c: Char) {
-    asm """
-    print [c];
-    flushStr;
-    """;
+    asm[Nothing]("""
+        print [c];
+        flushStr;
+    """);
 }
 
 @inline
 fun print(i: Number) {
-    asm """
-    print [i];
-    flush;
-    """;
+    asm[Nothing]("""
+        print [i];
+        flush;
+    """);
+}
+
+@inline
+fun read(): Number {
+    let i: Number;
+    asm[Nothing]("""
+        read [i];
+    """);
+    return i;
 }
