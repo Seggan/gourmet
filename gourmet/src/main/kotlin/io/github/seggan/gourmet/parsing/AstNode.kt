@@ -17,6 +17,7 @@ sealed interface AstNode<T> {
     data class Function<T>(
         val attributes: Set<String>,
         val name: String,
+        val genericArgs: List<String>,
         val args: List<Pair<String, TypeName>>,
         val returnType: TypeName?,
         val body: Block<T>,

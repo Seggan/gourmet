@@ -5,28 +5,25 @@ import io.github.seggan.gourmet.compilation.ir.CompiledFunction
 import io.github.seggan.gourmet.compilation.ir.Continuation
 import io.github.seggan.gourmet.compilation.ir.Insn
 import io.github.seggan.gourmet.parsing.AstNode
-import io.github.seggan.gourmet.typing.Signature
-import io.github.seggan.gourmet.typing.Type
-import io.github.seggan.gourmet.typing.TypeData
-import io.github.seggan.gourmet.typing.realType
+import io.github.seggan.gourmet.typing.*
 
 class IrGenerator private constructor(
-    private val ast: AstNode.File<TypeData>,
+    private val checked: TypedAst,
     private val compiledFunctions: MutableList<CompiledFunction>
 ) {
 
     private val scopes = ArrayDeque<Scope>()
     private var declaredVariables = ArrayDeque<MutableSet<Variable>>()
 
-    private val functions = ast.functions.map {
-        Signature(it.name, it.realType as Type.Function)
-    }.toSet() + compiledFunctions.map { it.signature }
+    private val functions = checked.functions.keys + compiledFunctions.map { it.signature }
 
     private val noinline = mutableSetOf<Signature>()
 
     private fun compile(removeUnused: Boolean): List<CompiledFunction> {
-        ast.functions.forEach(::compileFunction)
-        return if (removeUnused) compiledFunctions.filter { "entry" in it.attributes || it.signature in noinline }
+        checked.functions.values.forEach(::compileFunction)
+        return if (removeUnused) compiledFunctions.filter {
+            "entry" in it.attributes || it.signature in noinline
+        }
         else compiledFunctions
     }
 
@@ -203,11 +200,12 @@ class IrGenerator private constructor(
     }
 
     private fun compileCall(node: AstNode.FunctionCall<TypeData>): Blocks {
-        val signature = (node.extra as TypeData.FunctionCall).overload
-        val compiletime = CompiletimeFunction.entries.firstOrNull { it.signature == signature }
+        val typeData = node.extra as TypeData.FunctionCall
+        val compiletime = CompiletimeFunction.signatures[typeData.overload]
         if (compiletime != null) {
             return with(compiletime) { compile(node) }
         }
+        val signature = typeData.overload.copy(type = typeData.call)
         if (signature !in functions) {
             throw CompilationException("Function not found: ${node.name}", node.location)
         }
@@ -304,18 +302,18 @@ class IrGenerator private constructor(
 
     companion object {
         fun generate(
-            ast: AstNode.File<TypeData>,
+            checked: TypedAst,
             external: List<CompiledFunction> = emptyList(),
             removeUnused: Boolean = true
         ): List<CompiledFunction> {
-            return IrGenerator(ast, external.toMutableList()).compile(removeUnused)
+            return IrGenerator(checked, external.toMutableList()).compile(removeUnused)
         }
     }
 }
 
 typealias Blocks = Pair<BasicBlock, BasicBlock>
 
-infix fun Blocks.then(block: BasicBlock): Blocks {
+private infix fun Blocks.then(block: BasicBlock): Blocks {
     if (second.continuation == null) {
         second.continuation = Continuation.Direct(block)
         return first to block
@@ -324,7 +322,7 @@ infix fun Blocks.then(block: BasicBlock): Blocks {
     }
 }
 
-infix fun Blocks.then(blocks: Blocks): Blocks {
+private infix fun Blocks.then(blocks: Blocks): Blocks {
     if (second.continuation == null) {
         second.continuation = Continuation.Direct(blocks.first)
         return first to blocks.second

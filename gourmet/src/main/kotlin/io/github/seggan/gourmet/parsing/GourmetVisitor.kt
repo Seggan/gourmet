@@ -12,7 +12,8 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
 
     override fun visitFunction(ctx: GourmetParser.FunctionContext): AstNode.Function<Unit> {
         val attributes = ctx.attribute().map { it.Identifier().text }.toSet()
-        val name = ctx.Identifier().text
+        val name = ctx.name.text
+        val genericArgs = ctx.gen.map { it.text }
         val args = ctx.parameter().map { it.Identifier().text to TypeName.parse(it.type()) }
         val returnType = ctx.type()?.let(TypeName::parse)
         var block = visitBlock(ctx.block())
@@ -29,7 +30,7 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
                 )
             }
         }
-        return AstNode.Function(attributes, name, args, returnType, block, ctx.location, Unit)
+        return AstNode.Function(attributes, name, genericArgs, args, returnType, block, ctx.location, Unit)
     }
 
     override fun visitBlock(ctx: GourmetParser.BlockContext): AstNode.Block<Unit> {

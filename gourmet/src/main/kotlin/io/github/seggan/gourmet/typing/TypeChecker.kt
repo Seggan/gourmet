@@ -6,52 +6,30 @@ import io.github.seggan.gourmet.parsing.TypeName
 import io.github.seggan.gourmet.util.Location
 
 class TypeChecker private constructor(
-    private val ast: AstNode.File<Unit>,
-    private val functions: MutableSet<Pair<AstNode.Function<Unit>?, Signature>>
+    private val signature: Signature,
+    functions: Set<Signature>,
+    private val functionMap: Map<AstNode.Function<Unit>, Signature>,
+    private val checked: MutableMap<Signature, AstNode.Function<TypeData>>,
+    private val generics: Map<Type.Generic, Type>
 ) {
 
-    private val types = listOf(
-        Type.Primitive.BOOLEAN,
-        Type.Primitive.CHAR,
-        Type.Primitive.NUMBER,
-        Type.Unit,
-        Type.Nothing,
-        Type.STRING
-    ).associateBy { it.tname }
-
+    private val functions = functions + CompiletimeFunction.entries.map { it.signature } + signature
     private val scopes = ArrayDeque<MutableList<Pair<String, Type>>>()
 
-    private lateinit var currentFunction: Signature
-
-    init {
-        functions += CompiletimeFunction.entries.map { null to it.signature }
-        functions += ast.functions.map { node ->
-            val args = node.args.map { it.second.resolve(node.location) }
-            val returnType = node.returnType?.resolve(node.location) ?: Type.Unit
-            val type = Type.Function(emptyList(), args, returnType)
-            val signature = Signature(node.name, type)
-            node to signature
-        }
-    }
-
-    private fun check(): AstNode.File<TypeData> {
-        return AstNode.File(ast.functions.map(::checkFunction), ast.location, TypeData.Empty)
-    }
-
-    private fun checkFunction(node: AstNode.Function<Unit>): AstNode.Function<TypeData> {
-        currentFunction = functions.first { it.first == node }.second
-        val args = node.args.unzip().first.zip(currentFunction.type.args)
+    private fun check(node: AstNode.Function<Unit>) {
+        val args = node.args.unzip().first.zip(signature.type.args)
         scopes.addFirst(args.toMutableList())
         val block = checkBlock(node.body)
         scopes.removeFirst()
-        return AstNode.Function(
+        checked += signature to AstNode.Function(
             node.attributes,
             node.name,
+            node.genericArgs,
             node.args,
             node.returnType,
             block,
             node.location,
-            TypeData.Basic(currentFunction.type)
+            TypeData.Basic(signature.type)
         )
     }
 
@@ -78,7 +56,7 @@ class TypeChecker private constructor(
 
     private fun checkDeclaration(node: AstNode.Declaration<Unit>): AstNode.Declaration<TypeData> {
         val value = node.value?.let(::checkExpression)
-        val type = node.type?.resolve(node.location)
+        val type = node.type?.resolve(node.location, generics)
             ?: value?.realType
             ?: throw TypeException("Cannot infer type of declaration", node.location)
         if (value != null && !value.realType.isAssignableTo(type)) {
@@ -105,7 +83,7 @@ class TypeChecker private constructor(
     private fun checkReturn(node: AstNode.Return<Unit>): AstNode.Return<TypeData> {
         val value = node.value?.let(::checkExpression)
         val valueType = value?.realType ?: Type.Unit
-        val returnType = currentFunction.type.returnType
+        val returnType = signature.type.returnType
         if (!valueType.isAssignableTo(returnType)) {
             throw TypeException(
                 "Cannot return $valueType from function with return type $returnType",
@@ -208,7 +186,7 @@ class TypeChecker private constructor(
 
     private fun checkFunctionCall(node: AstNode.FunctionCall<Unit>): AstNode.FunctionCall<TypeData> {
         var exception = TypeException("Unknown function: ${node.name}", node.location)
-        outer@ for ((_, function) in functions) {
+        outer@ for (function in functions) {
             if (function.name != node.name) continue
             var type = function.type
             if (node.genericArgs.size != type.genericArgs.size) {
@@ -222,8 +200,11 @@ class TypeChecker private constructor(
                 exception = TypeException("Expected ${type.args.size} arguments, got ${node.args.size}", node.location)
                 continue
             }
-            for ((generic, provided) in type.genericArgs.zip(node.genericArgs)) {
-                type = type.fillGeneric(generic, provided.resolve(node.location)) as Type.Function
+            val genericMap = type.genericArgs.map { it as Type.Generic }
+                .zip(node.genericArgs.map { it.resolve(node.location, generics) })
+                .toMap()
+            for ((generic, provided) in genericMap) {
+                type = type.fillGeneric(generic, provided) as Type.Function
             }
             if (type.genericArgs.any { it is Type.Generic }) {
                 exception = TypeException("Generic arguments not fully resolved", node.location)
@@ -231,9 +212,23 @@ class TypeChecker private constructor(
             }
             val args = node.args.map(::checkExpression)
             for ((arg, provided) in type.args.zip(args)) {
-                if (!provided.realType.isAssignableTo(arg)) {
-                    exception = TypeException("Cannot assign ${provided.realType} to $arg", provided.location)
+                val providedType = provided.realType
+                if (!providedType.isAssignableTo(arg)) {
+                    exception = TypeException("Cannot pass $providedType to $arg", provided.location)
                     continue@outer
+                }
+            }
+            if (function !in CompiletimeFunction.signatures) {
+                val signature = function.copy(type = type)
+                if (signature !in functions && checked.keys.all { it.type != type }) {
+                    // monomorphize the function
+                    TypeChecker(
+                        signature,
+                        functions,
+                        functionMap,
+                        checked,
+                        genericMap
+                    ).check(functionMap.entries.first { it.value == function }.key)
                 }
             }
             return AstNode.FunctionCall(
@@ -256,14 +251,6 @@ class TypeChecker private constructor(
         return AstNode.MemberAccess(expr, node.member, node.location, TypeData.Basic(member.second))
     }
 
-    private fun TypeName.resolve(location: Location): Type {
-        return when (this) {
-            is TypeName.Simple -> types[name] ?: throw TypeException("Unknown type: $this", location)
-            is TypeName.Pointer -> Type.Pointer(type.resolve(location))
-            is TypeName.Generic -> Type.Generic(name)
-        }
-    }
-
     private fun findVariable(name: String, location: Location): Type {
         for (scope in scopes) {
             for ((n, t) in scope) {
@@ -276,8 +263,23 @@ class TypeChecker private constructor(
     }
 
     companion object {
-        fun check(ast: AstNode.File<Unit>, external: List<Signature> = emptyList()): AstNode.File<TypeData> {
-            return TypeChecker(ast, external.map { null to it }.toMutableSet()).check()
+        fun check(ast: AstNode.File<Unit>, external: List<Signature> = emptyList()): TypedAst {
+            val functions = external.toMutableSet()
+            val functionMap = ast.functions.associateWith { node ->
+                val genericArgs = node.genericArgs.map { Type.Generic(it) }
+                val genericMap = genericArgs.zip(genericArgs).toMap()
+                val args = node.args.map { (_, type) -> type.resolve(node.location, genericMap) }
+                val returnType = node.returnType?.resolve(node.location, genericMap) ?: Type.Unit
+                Signature(node.name, Type.Function(genericArgs, args, returnType))
+            }
+            functions += functionMap.values
+            val checked = mutableMapOf<Signature, AstNode.Function<TypeData>>()
+            for (function in ast.functions) {
+                val signature = functionMap[function]!!
+                if (signature.type.genericArgs.any { it is Type.Generic }) continue
+                TypeChecker(signature, functions, functionMap, checked, emptyMap()).check(function)
+            }
+            return TypedAst(checked)
         }
     }
 }
@@ -285,3 +287,29 @@ class TypeChecker private constructor(
 class TypeException(message: String, location: Location) : Exception(
     "Type error at ${location.file}:${location.row}:${location.column}: $message"
 )
+
+private val types = listOf(
+    Type.Primitive.BOOLEAN,
+    Type.Primitive.CHAR,
+    Type.Primitive.NUMBER,
+    Type.Unit,
+    Type.Nothing,
+    Type.STRING
+).associateBy { it.tname }
+
+private fun TypeName.resolve(location: Location, generics: Map<Type.Generic, Type>): Type {
+    return when (this) {
+        is TypeName.Simple -> types[name]
+            ?: generics[Type.Generic(name)]
+            ?: throw TypeException(
+                "Unknown type: $name",
+                location
+            )
+
+        is TypeName.Pointer -> Type.Pointer(type.resolve(location, generics))
+        is TypeName.Generic -> Type.Generic(name)
+    }
+}
+
+private fun Type.fillGenerics(generics: Map<Type, Type>) =
+    generics.entries.fold(this) { type, (generic, provided) -> type.fillGeneric(generic, provided) }

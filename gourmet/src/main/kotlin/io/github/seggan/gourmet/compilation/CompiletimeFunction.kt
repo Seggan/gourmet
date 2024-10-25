@@ -60,6 +60,10 @@ enum class CompiletimeFunction(val signature: Signature) {
     ;
 
     abstract fun IrGenerator.compile(function: AstNode.FunctionCall<TypeData>): Blocks
+
+    companion object {
+        val signatures = entries.associateBy { it.signature }
+    }
 }
 
 private val variableReplacementRegex = Regex("""\[([a-zA-Z_][a-zA-Z0-9_]*)(?::(\d+))?]""")

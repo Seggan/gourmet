@@ -1,7 +1,6 @@
 package io.github.seggan.gourmet.compilation.ir
 
 import io.github.seggan.gourmet.typing.Signature
-import io.github.seggan.gourmet.typing.TypeData.Empty.type
 import io.github.seggan.gourmet.util.randomString
 
 data class CompiledFunction(
@@ -53,7 +52,7 @@ fun CompiledFunction.toGraph(): String {
     return buildString {
         appendLine("subgraph ${signature.name} {")
         appendLine("rankdir=LR;")
-        appendLine("""${signature.name} [label="${signature.name} ${type.tname}", shape=box];""")
+        appendLine("""${signature.name} [label="$signature", shape=box];""")
         appendLine("""$returnName [shape=plaintext, label="return"];""")
         for (node in nodes) {
             appendLine(node)

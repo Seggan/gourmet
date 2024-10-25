@@ -11,7 +11,9 @@ file
     ;
 
 function
-    : attribute* FUN Identifier LPAREN (parameter (COMMA parameter)*)? RPAREN (COLON type)? block
+    : attribute* FUN name=Identifier (LBRACKET gen+=Identifier (COMMA gen+=Identifier)* RBRACKET)?
+    LPAREN (parameter (COMMA parameter)*)? RPAREN
+    (COLON type)? block
     ;
 
 attribute
