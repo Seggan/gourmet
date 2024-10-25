@@ -43,7 +43,7 @@ fun CompiledFunction.toGraph(): String {
                 edges.add("${block.id} -> ${cont.otherwise.id} [label=\"false\"];")
             }
 
-            is Continuation.Call -> edges.add("${block.id} -> ${cont.returnTo.id} [label=\"call ${cont.function.name}\"];")
+            is Continuation.Call -> edges.add("${block.id} -> ${cont.returnTo.id} [label=\"call ${cont.function}\"];")
             is Continuation.Return -> edges.add("${block.id} -> $returnName;")
             null -> {}
         }
@@ -52,12 +52,12 @@ fun CompiledFunction.toGraph(): String {
     return buildString {
         appendLine("subgraph ${signature.name} {")
         appendLine("rankdir=LR;")
-        appendLine("""${signature.name} [label="$signature", shape=box];""")
+        appendLine("""${signature.hashCode()} [label="$signature", shape=box];""")
         appendLine("""$returnName [shape=plaintext, label="return"];""")
         for (node in nodes) {
             appendLine(node)
         }
-        appendLine("""${signature.name} -> ${body.id};""")
+        appendLine("""${signature.hashCode()} -> ${body.id};""")
         for (edge in edges) {
             appendLine(edge)
         }

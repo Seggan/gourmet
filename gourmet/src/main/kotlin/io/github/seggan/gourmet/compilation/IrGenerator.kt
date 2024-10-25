@@ -98,12 +98,12 @@ class IrGenerator private constructor(
             throw CompilationException("Variable already declared: ${node.name}", node.location)
         }
         val variable = Variable.generate(node.name, node.realType)
-        scopes.first().add(variable)
         declaredVariables.first().add(variable)
         if (node.value != null) {
             +compileExpression(node.value)
             +variable.pop()
         }
+        scopes.first().add(variable)
     }
 
     private fun compileIf(node: AstNode.If<TypeData>): Blocks {

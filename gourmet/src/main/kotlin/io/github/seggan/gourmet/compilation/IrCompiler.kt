@@ -29,6 +29,9 @@ class IrCompiler private constructor(private val functions: List<CompiledFunctio
         sb.appendLine("def \$state ${entry.body.state};")
         sb.appendLine("def @returns;")
         sb.appendLine("def @callStack;")
+        sb.appendLine("def @heap;")
+        sb.appendLine("def @antiHeap;")
+        sb.appendLine("def \$heapSize 0;")
         for (variable in hoisted) {
             for (part in variable.mapped) {
                 sb.appendLine("def $$part;")
