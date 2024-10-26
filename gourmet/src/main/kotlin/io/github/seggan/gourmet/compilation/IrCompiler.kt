@@ -54,7 +54,7 @@ class IrCompiler private constructor(private val functions: List<CompiledFunctio
             }
         }
         for (insn in block.insns) {
-            sb.appendLine(insn.toIr().trimEnd())
+            sb.appendLine(insn.toIr())
         }
         for (variable in block.droppedVariables.filterNot { it in hoisted }) {
             for (part in variable.mapped) {

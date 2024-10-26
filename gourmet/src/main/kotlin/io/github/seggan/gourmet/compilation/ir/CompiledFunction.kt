@@ -15,7 +15,7 @@ fun CompiledFunction.toGraph(): String {
     val nodes = mutableSetOf<String>()
     val edges = mutableSetOf<String>()
     for (block in children) {
-        val insns = block.insns.joinToString("\\n") { it.toIr().trimEnd() }
+        val insns = block.insns.joinToString("\\n") { it.toIr() }
         val declared = block.declaredVariables.joinToString(", ") { it.name }
         val dropped = block.droppedVariables.joinToString(", ") { it.name }
         val node = StringBuilder()

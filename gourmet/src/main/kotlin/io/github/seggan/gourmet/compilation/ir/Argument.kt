@@ -17,6 +17,7 @@ sealed interface Argument {
     }
 
     data class Block(val insns: List<Insn>) : Argument {
+        constructor(vararg insns: Insn) : this(insns.toList())
         override fun toIr(): String = insns.joinToString(
             separator = "\n",
             prefix = "{\n",

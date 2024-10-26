@@ -42,6 +42,7 @@ sealed interface AstNode<T> {
     ) : Statement<T>
 
     data class Assignment<T>(
+        val isPointer: Boolean,
         val name: String,
         val assignType: AssignType,
         val value: Expression<T>,

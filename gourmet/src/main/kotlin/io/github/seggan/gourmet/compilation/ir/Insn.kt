@@ -22,7 +22,7 @@ data class Insn(
             append(' ')
             append(arg.toIr())
         }
-        appendLine(';')
+        append(';')
     }
 
     @Suppress("FunctionName")

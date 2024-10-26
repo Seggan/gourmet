@@ -1,12 +1,10 @@
 package io.github.seggan.gourmet.compilation
 
-import io.github.seggan.gourmet.compilation.ir.BasicBlock
-import io.github.seggan.gourmet.compilation.ir.CompiledFunction
-import io.github.seggan.gourmet.compilation.ir.Continuation
-import io.github.seggan.gourmet.compilation.ir.Insn
+import io.github.seggan.gourmet.compilation.ir.*
 import io.github.seggan.gourmet.parsing.AstNode
 import io.github.seggan.gourmet.typing.*
 
+@Suppress("DuplicatedCode")
 class IrGenerator private constructor(private val checked: TypedAst) {
 
     private val scopes = ArrayDeque<Scope>()
@@ -84,10 +82,18 @@ class IrGenerator private constructor(private val checked: TypedAst) {
             +compileExpression(node.value)
         } else {
             +variable.push()
+            if (node.isPointer) {
+                +getPointer(variable.type as Type.Pointer)
+            }
             +compileExpression(node.value)
             +op.compile()
         }
-        +variable.pop()
+        if (node.isPointer) {
+            +variable.push()
+            +setPointer(variable.type as Type.Pointer)
+        } else {
+            +variable.pop()
+        }
     }
 
     private fun compileDeclaration(node: AstNode.Declaration<TypeData>) = buildBlock {
@@ -185,7 +191,7 @@ class IrGenerator private constructor(private val checked: TypedAst) {
             is AstNode.StringLiteral -> TODO()
             is AstNode.UnaryExpression -> buildBlock {
                 +compileExpression(node.value)
-                +node.operator.compile()
+                +with(node.operator) { compile(node.value.realType) }
             }
 
             is AstNode.Variable -> buildBlock {
@@ -237,6 +243,85 @@ class IrGenerator private constructor(private val checked: TypedAst) {
             callBlock.second.continuation = Continuation.Call(signature, restoreBlock.first)
             return callBlock.first to restoreBlock.second
         }
+    }
+
+    fun getPointer(pointer: Type.Pointer) = buildBlock {
+        val baseType = pointer.target
+        val ptr = Argument.Variable("ptr")
+        val tempDeref = Argument.Variable("tempDeref")
+        +Insn("def", ptr)
+        +Insn("pop", ptr)
+        +Insn("def", tempDeref)
+        +Insn("push", ARG_HEAP_SIZE)
+        +Insn("sub", ptr)
+        +Insn("del", ptr)
+        val moved = Argument.Variable("moved")
+        +Insn("def", moved)
+        +Insn("clone", moved)
+        +Insn(
+            "for", Argument.Block(
+                Insn("pop", tempDeref, stack = STACK_HEAP),
+                Insn("push", tempDeref, stack = STACK_ANTI_HEAP)
+            )
+        )
+        +Insn.Push(baseType.size)
+        +Insn(
+            "for", Argument.Block(
+                Insn("pop", tempDeref, stack = STACK_ANTI_HEAP),
+                Insn("push", tempDeref),
+                Insn("push", tempDeref, stack = STACK_HEAP)
+            )
+        )
+        +Insn("push", moved)
+        +Insn("sub", Argument.Number(baseType.size))
+        +Insn(
+            "for", Argument.Block(
+                Insn("pop", tempDeref, stack = STACK_ANTI_HEAP),
+                Insn("push", tempDeref, stack = STACK_HEAP),
+            )
+        )
+        +Insn("del", moved)
+        +Insn("del", tempDeref)
+    }
+
+    private fun setPointer(pointer: Type.Pointer) = buildBlock {
+        val baseType = pointer.target
+        val ptr = Argument.Variable("ptr")
+        val tempRef = Argument.Variable("tempRef")
+        +Insn("def", ptr)
+        +Insn("pop", ptr)
+        +Insn("def", tempRef)
+        +Insn("push", ARG_HEAP_SIZE)
+        +Insn("sub", ptr)
+        +Insn("del", ptr)
+        +Insn("sub", Argument.Number(baseType.size))
+        val moved = Argument.Variable("moved")
+        +Insn("def", moved)
+        +Insn("clone", moved)
+        +Insn(
+            "for", Argument.Block(
+                Insn("pop", tempRef, stack = STACK_HEAP),
+                Insn("push", tempRef, stack = STACK_ANTI_HEAP)
+            )
+        )
+        +Insn.Push(baseType.size)
+        +Insn(
+            "for", Argument.Block(
+                Insn("pop", tempRef, stack = STACK_HEAP),
+                Insn("pop", tempRef),
+                Insn("push", tempRef, stack = STACK_ANTI_HEAP)
+            )
+        )
+        +Insn("push", moved)
+        +Insn("add", Argument.Number(baseType.size))
+        +Insn(
+            "for", Argument.Block(
+                Insn("pop", tempRef, stack = STACK_ANTI_HEAP),
+                Insn("push", tempRef, stack = STACK_HEAP),
+            )
+        )
+        +Insn("del", moved)
+        +Insn("del", tempRef)
     }
 
     fun getVariable(name: String): Variable? {
@@ -298,10 +383,15 @@ class IrGenerator private constructor(private val checked: TypedAst) {
     }
 
     companion object {
+
+        private val ARG_HEAP_SIZE = Argument.Variable("heapSize")
+        private const val STACK_HEAP = "heap"
+        private const val STACK_ANTI_HEAP = "antiHeap"
+
         fun generate(
             checked: TypedAst,
         ): List<CompiledFunction> {
-            return IrGenerator(checked, ).compile()
+            return IrGenerator(checked).compile()
         }
     }
 }

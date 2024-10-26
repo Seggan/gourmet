@@ -67,7 +67,14 @@ class TypeChecker private constructor(
 
     private fun checkAssignment(node: AstNode.Assignment<Unit>): AstNode.Assignment<TypeData> {
         val value = checkExpression(node.value)
-        val type = findVariable(node.name, node.location)
+        var type = findVariable(node.name, node.location)
+        if (node.isPointer) {
+            if (type is Type.Pointer) {
+                type = type.target
+            } else {
+                throw TypeException("Cannot assign to non-pointer type", node.location)
+            }
+        }
         val assignOp = node.assignType.op
         if (assignOp == null) {
             if (!value.realType.isAssignableTo(type)) {
@@ -76,7 +83,14 @@ class TypeChecker private constructor(
         } else {
             assignOp.checkType(type, value.realType, node.location)
         }
-        return AstNode.Assignment(node.name, node.assignType, value, node.location, TypeData.Basic(type))
+        return AstNode.Assignment(
+            node.isPointer,
+            node.name,
+            node.assignType,
+            value,
+            node.location,
+            TypeData.Empty
+        )
     }
 
     private fun checkReturn(node: AstNode.Return<Unit>): AstNode.Return<TypeData> {
