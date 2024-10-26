@@ -22,3 +22,21 @@ fun read(): Number {
     """);
     return i;
 }
+
+fun alloc[T](n: Number): T* {
+    let amount = n * sizeof[T]();
+    let ptr = asm[Number]("push $heapSize;") + 1;
+    asm[Nothing]("""
+        push [amount];
+        for {
+            @heap.push 0;
+            inc $heapSize;
+        };
+    """);
+    return transmute[Number, T*](ptr);
+}
+
+@inline
+fun alloc[T](): T* {
+    return alloc[T](1);
+}

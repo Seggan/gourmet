@@ -7,24 +7,21 @@ import io.github.seggan.gourmet.compilation.ir.Insn
 import io.github.seggan.gourmet.parsing.AstNode
 import io.github.seggan.gourmet.typing.*
 
-class IrGenerator private constructor(
-    private val checked: TypedAst,
-    private val compiledFunctions: MutableList<CompiledFunction>
-) {
+class IrGenerator private constructor(private val checked: TypedAst) {
 
     private val scopes = ArrayDeque<Scope>()
     private var declaredVariables = ArrayDeque<MutableSet<Variable>>()
 
-    private val functions = checked.functions.keys + compiledFunctions.map { it.signature }
+    private val functions = checked.functions.keys
+    private val compiledFunctions = mutableListOf<CompiledFunction>()
 
     private val noinline = mutableSetOf<Signature>()
 
-    private fun compile(removeUnused: Boolean): List<CompiledFunction> {
+    private fun compile(): List<CompiledFunction> {
         checked.functions.values.forEach(::compileFunction)
-        return if (removeUnused) compiledFunctions.filter {
+        return compiledFunctions.filter {
             "entry" in it.attributes || it.signature in noinline
         }
-        else compiledFunctions
     }
 
     private fun compileFunction(function: AstNode.Function<TypeData>) {
@@ -303,10 +300,8 @@ class IrGenerator private constructor(
     companion object {
         fun generate(
             checked: TypedAst,
-            external: List<CompiledFunction> = emptyList(),
-            removeUnused: Boolean = true
         ): List<CompiledFunction> {
-            return IrGenerator(checked, external.toMutableList()).compile(removeUnused)
+            return IrGenerator(checked, ).compile()
         }
     }
 }

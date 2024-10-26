@@ -5,8 +5,8 @@ import io.github.seggan.gourmet.antlr.GourmetParser
 import io.github.seggan.gourmet.compilation.BlockOptimizer
 import io.github.seggan.gourmet.compilation.IrCompiler
 import io.github.seggan.gourmet.compilation.IrGenerator
-import io.github.seggan.gourmet.compilation.ir.CompiledFunction
 import io.github.seggan.gourmet.compilation.ir.toGraph
+import io.github.seggan.gourmet.parsing.AstNode
 import io.github.seggan.gourmet.parsing.GourmetVisitor
 import io.github.seggan.gourmet.typing.TypeChecker
 import io.github.seggan.gourmet.util.Location
@@ -16,31 +16,24 @@ import java.io.InputStream
 import kotlin.io.path.*
 
 fun main(args: Array<String>) {
-    val std = getIr(
+    val std = getAst(
         "std.gourmet",
         GourmetVisitor::class.java.getResourceAsStream("/std.gourmet")!!,
-        removeUnused = false
     )
     val file = Path(args[0])
-    val main = getIr(file.name, file.inputStream(), std)
-    val dot = main.joinToString("\n") { it.toGraph() }
+    val main = std + getAst(file.name, file.inputStream())
+    val checked = TypeChecker.check(main)
+    val ir = IrGenerator.generate(checked)
+    val optimized = ir.map { it.copy(body = BlockOptimizer.optimize(it.body)) }
+    val dot = optimized.joinToString("\n") { it.toGraph() }
     Path("graph.dot").writeText("digraph G { $dot }")
     Runtime.getRuntime().exec("dot -Tpng graph.dot -o graph.png")
-    val asm = IrCompiler.compile(main)
+    val asm = IrCompiler.compile(optimized)
     Path("${file.nameWithoutExtension}.recipe").writeText(asm)
 }
 
-private fun getIr(
-    fileName: String,
-    file: InputStream,
-    external: List<CompiledFunction> = emptyList(),
-    removeUnused: Boolean = true
-): List<CompiledFunction> {
+private fun getAst(fileName: String, file: InputStream): List<AstNode.Function<Unit>> {
     Location.currentFile = fileName
     val parser = GourmetParser(CommonTokenStream(GourmetLexer(CharStreams.fromStream(file))))
-    val ast = GourmetVisitor.visitFile(parser.file())
-    val typedAst = TypeChecker.check(ast, external.map { it.signature })
-    val compiled = IrGenerator.generate(typedAst, external, removeUnused)
-    return compiled.map { it.copy(body = BlockOptimizer.optimize(it.body)) }
-    //return compiled
+    return GourmetVisitor.visitFile(parser.file()).functions
 }

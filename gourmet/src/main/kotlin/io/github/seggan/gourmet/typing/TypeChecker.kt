@@ -7,13 +7,12 @@ import io.github.seggan.gourmet.util.Location
 
 class TypeChecker private constructor(
     private val signature: Signature,
-    functions: Set<Signature>,
     private val functionMap: Map<AstNode.Function<Unit>, Signature>,
     private val checked: MutableMap<Signature, AstNode.Function<TypeData>>,
     private val generics: Map<Type.Generic, Type>
 ) {
 
-    private val functions = functions + CompiletimeFunction.entries.map { it.signature } + signature
+    private val functions = functionMap.values + CompiletimeFunction.entries.map { it.signature } + signature
     private val scopes = ArrayDeque<MutableList<Pair<String, Type>>>()
 
     private fun check(node: AstNode.Function<Unit>) {
@@ -224,7 +223,6 @@ class TypeChecker private constructor(
                     // monomorphize the function
                     TypeChecker(
                         signature,
-                        functions,
                         functionMap,
                         checked,
                         genericMap
@@ -263,21 +261,19 @@ class TypeChecker private constructor(
     }
 
     companion object {
-        fun check(ast: AstNode.File<Unit>, external: List<Signature> = emptyList()): TypedAst {
-            val functions = external.toMutableSet()
-            val functionMap = ast.functions.associateWith { node ->
+        fun check(functions: List<AstNode.Function<Unit>>): TypedAst {
+            val functionMap = functions.associateWith { node ->
                 val genericArgs = node.genericArgs.map { Type.Generic(it) }
                 val genericMap = genericArgs.zip(genericArgs).toMap()
                 val args = node.args.map { (_, type) -> type.resolve(node.location, genericMap) }
                 val returnType = node.returnType?.resolve(node.location, genericMap) ?: Type.Unit
                 Signature(node.name, Type.Function(genericArgs, args, returnType))
             }
-            functions += functionMap.values
             val checked = mutableMapOf<Signature, AstNode.Function<TypeData>>()
-            for (function in ast.functions) {
+            for (function in functions) {
                 val signature = functionMap[function]!!
                 if (signature.type.genericArgs.any { it is Type.Generic }) continue
-                TypeChecker(signature, functions, functionMap, checked, emptyMap()).check(function)
+                TypeChecker(signature, functionMap, checked, emptyMap()).check(function)
             }
             return TypedAst(checked)
         }
