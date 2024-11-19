@@ -9,7 +9,11 @@ object PeepholeOptimizer {
             listOf(
                 """push (.+?);""",
                 """(\w+) \{ nop; \};"""
-            ) to """$2 $1;"""
+            ) to """$2 $1;""",
+            listOf(
+                """\s+push .+?;""",
+                """pop;"""
+            ) to "",
         )
 
         patterns = protoPatterns.map { (patterns, replacement) ->
