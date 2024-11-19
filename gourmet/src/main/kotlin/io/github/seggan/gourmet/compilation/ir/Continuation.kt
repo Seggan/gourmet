@@ -11,7 +11,9 @@ sealed interface Continuation {
 
         override fun continuesTo(block: BasicBlock) = this.block === block
 
-        override fun clone(): Continuation = Direct(block.clone())
+        override fun toString(): String {
+            return "Direct(block=${block.id})"
+        }
     }
 
     data class Conditional(val then: BasicBlock, val otherwise: BasicBlock) : Continuation {
@@ -24,7 +26,9 @@ sealed interface Continuation {
 
         override fun continuesTo(block: BasicBlock) = then === block || otherwise === block
 
-        override fun clone(): Continuation = Conditional(then.clone(), otherwise.clone())
+        override fun toString(): String {
+            return "Conditional(then=${then.id}, otherwise=${otherwise.id})"
+        }
     }
 
     data class Call(val function: Signature, val returnTo: BasicBlock) : Continuation {
@@ -34,16 +38,16 @@ sealed interface Continuation {
 
         override fun continuesTo(block: BasicBlock) = returnTo === block
 
-        override fun clone(): Continuation = Call(function, returnTo.clone())
+        override fun toString(): String {
+            return "Call(function=$function, returnTo=${returnTo.id})"
+        }
     }
 
     data object Return : Continuation {
         override fun swap(previous: BasicBlock, new: BasicBlock): Continuation = this
         override fun continuesTo(block: BasicBlock) = false
-        override fun clone(): Continuation = this
     }
 
     fun swap(previous: BasicBlock, new: BasicBlock): Continuation
     fun continuesTo(block: BasicBlock): Boolean
-    fun clone(): Continuation
 }

@@ -39,8 +39,8 @@ fun CompiledFunction.toGraph(): String {
         when (val cont = block.continuation) {
             is Continuation.Direct -> edges.add("${block.id} -> ${cont.block.id};")
             is Continuation.Conditional -> {
-                edges.add("${block.id} -> ${cont.then.id} [label=\"true\"];")
-                edges.add("${block.id} -> ${cont.otherwise.id} [label=\"false\"];")
+                edges.add("${block.id} -> ${cont.then.id} [label=\"true\" color=\"green\"];")
+                edges.add("${block.id} -> ${cont.otherwise.id} [label=\"false\" color=\"red\"];")
             }
 
             is Continuation.Call -> edges.add("${block.id} -> ${cont.returnTo.id} [label=\"call ${cont.function}\"];")

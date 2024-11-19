@@ -42,8 +42,10 @@ macro dec reg {
 macro dec { sub 1; }
 
 macro neg reg {
+    def $tempNeg reg;
     push 0;
-    sub reg;
+    sub $tempNeg;
+    del $tempNeg;
 }
 
 macro neg { neg { nop; }; }
@@ -107,12 +109,12 @@ macro lt y {
 
 macro not bool {
     def @condNot;
+    def $tempNot bool;
     @condNot.exec {
         push 1;
         push 0;
-        rot bool;
+        rot $tempNot;
         pop;
-        def $tempNot;
         pop $tempNot;
     };
     push $tempNot;
@@ -122,12 +124,12 @@ macro not bool {
 
 macro bool val {
     def @condBool;
+    def $tempBool val;
     @condBool.exec {
         push 0;
         push 1;
-        rot val;
+        rot $tempBool;
         pop;
-        def $tempBool;
         pop $tempBool;
     };
     push $tempBool;

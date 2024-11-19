@@ -13,13 +13,6 @@ data class BasicBlock(
 
     val children: List<BasicBlock> get() = mutableListOf<BasicBlock>().apply(::putChildren)
 
-    fun clone() = BasicBlock(
-        insns.toList(),
-        declaredVariables.toSet(),
-        droppedVariables.toSet(),
-        continuation?.clone()
-    )
-
     private fun putChildren(children: MutableList<BasicBlock>) {
         if (children.any { it.id == id }) return
         children.add(this)
@@ -29,10 +22,42 @@ data class BasicBlock(
                 cont.then.putChildren(children)
                 cont.otherwise.putChildren(children)
             }
+
             is Continuation.Call -> cont.returnTo.putChildren(children)
             is Continuation.Return -> {}
             null -> {}
         }
+    }
+
+    fun clone(): BasicBlock {
+        val children = children.associateBy { it.id }
+        val oldToNew = mutableMapOf<String, String>()
+        val newChildren = mutableMapOf<String, BasicBlock>()
+        for ((id, child) in children) {
+            val new = BasicBlock(
+                child.insns,
+                child.declaredVariables,
+                child.droppedVariables
+            ) // hehe immutable data structures go brr
+            oldToNew[id] = new.id
+            newChildren[new.id] = new
+        }
+        for ((id, child) in children) {
+            val cont = child.continuation
+            val newChild = newChildren[oldToNew[id]!!]!!
+            newChild.continuation = when (cont) {
+                is Continuation.Direct -> cont.copy(block = newChildren[oldToNew[cont.block.id]!!]!!)
+                is Continuation.Conditional -> cont.copy(
+                    then = newChildren[oldToNew[cont.then.id]!!]!!,
+                    otherwise = newChildren[oldToNew[cont.otherwise.id]!!]!!
+                )
+
+                is Continuation.Call -> cont.copy(returnTo = newChildren[oldToNew[cont.returnTo.id]!!]!!)
+                is Continuation.Return -> cont
+                null -> null
+            }
+        }
+        return newChildren[oldToNew[this.id]!!]!!
     }
 
     override fun equals(other: Any?): Boolean {
