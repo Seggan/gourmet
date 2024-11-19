@@ -401,9 +401,23 @@ private fun expandMacros(
                 )
             }
         } else {
-            listOf(invoc.copy(args = mappedArgs))
+            val newInvoc = invoc.copy(args = mappedArgs)
+            if (filterInsns(newInvoc)) {
+                emptyList()
+            } else {
+                listOf(newInvoc)
+            }
         }
     }
+}
+
+private fun filterInsns(insn: AstNode.Invocation): Boolean {
+    // Filter out empty push instructions
+    return insn.stack == null
+            &&
+            insn.name == "push"
+            &&
+            insn.args.singleOrNull() == AstNode.Block.NOP_BLOCK
 }
 
 private const val REGISTER_VALID_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"

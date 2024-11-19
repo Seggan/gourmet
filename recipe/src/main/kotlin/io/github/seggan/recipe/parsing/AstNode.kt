@@ -1,5 +1,6 @@
 package io.github.seggan.recipe.parsing
 
+import com.github.h0tk3y.betterParse.parser.parseToEnd
 import java.math.BigDecimal
 
 sealed interface AstNode {
@@ -10,7 +11,11 @@ sealed interface AstNode {
     data class Register(val name: String) : Expression
     data class Stack(val name: String) : Expression
     data class Variable(val name: String) : Expression
-    data class Block(val body: List<Invocation>) : Expression
+    data class Block(val body: List<Invocation>) : Expression {
+        companion object {
+            val NOP_BLOCK = Parser.block.parseToEnd(Parser.tokenizer.tokenize("{ exec {}; }"))
+        }
+    }
 
     data class Invocation(val stack: Stack?, val name: String, val args: List<Expression>) : AstNode
     data class Macro(val name: String, val args: List<String>, val body: List<Invocation>) : AstNode

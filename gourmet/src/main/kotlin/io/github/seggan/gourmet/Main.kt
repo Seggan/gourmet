@@ -5,6 +5,7 @@ import io.github.seggan.gourmet.antlr.GourmetParser
 import io.github.seggan.gourmet.compilation.BlockOptimizer
 import io.github.seggan.gourmet.compilation.IrCompiler
 import io.github.seggan.gourmet.compilation.IrGenerator
+import io.github.seggan.gourmet.compilation.PeepholeOptimizer
 import io.github.seggan.gourmet.compilation.ir.toGraph
 import io.github.seggan.gourmet.parsing.AstNode
 import io.github.seggan.gourmet.parsing.GourmetVisitor
@@ -28,7 +29,7 @@ fun main(args: Array<String>) {
     val dot = optimized.joinToString("\n") { it.toGraph() }
     Path("graph.dot").writeText("digraph G { $dot }")
     Runtime.getRuntime().exec("dot -Tpng graph.dot -o graph.png")
-    val asm = IrCompiler.compile(optimized)
+    val asm = PeepholeOptimizer.optimize(IrCompiler.compile(optimized))
     Path("${file.nameWithoutExtension}.recipe").writeText(asm)
 }
 
