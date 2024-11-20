@@ -35,13 +35,13 @@ fun CompiledFunction.toGraph(): String {
             if (newline) node.append("\\n")
             node.append("Dropped: $dropped")
         }
-        node.append("\"];")
+        node.append("\" shape=box];")
         nodes.add(node.toString())
         when (val cont = block.continuation) {
             is Continuation.Direct -> edges.add("${block.id} -> ${cont.block.id};")
             is Continuation.Conditional -> {
-                edges.add("${block.id} -> ${cont.then.id} [label=\"true\" color=\"green\"];")
-                edges.add("${block.id} -> ${cont.otherwise.id} [label=\"false\" color=\"red\"];")
+                edges.add("${block.id} -> ${cont.then.id} [label=true color=green];")
+                edges.add("${block.id} -> ${cont.otherwise.id} [label=false color=red];")
             }
 
             is Continuation.Call -> edges.add("${block.id} -> ${cont.returnTo.id} [label=\"call ${cont.function}\"];")
@@ -53,8 +53,8 @@ fun CompiledFunction.toGraph(): String {
     return buildString {
         appendLine("subgraph ${signature.name} {")
         appendLine("rankdir=LR;")
-        appendLine("""${signature.hashCode()} [label="$signature", shape=box];""")
-        appendLine("""$returnName [shape=plaintext, label="return"];""")
+        appendLine("""${signature.hashCode()} [label="$signature"];""")
+        appendLine("""$returnName [shape=plaintext, label=return];""")
         for (node in nodes) {
             appendLine(node)
         }
