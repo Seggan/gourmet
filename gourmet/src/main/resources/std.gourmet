@@ -40,3 +40,11 @@ fun alloc[T](n: Number): T* {
 fun alloc[T](): T* {
     return alloc[T](1);
 }
+
+fun pow(base: Number, exp: Number): Number {
+    let result = 1;
+    for (let i = 0; i != exp; i += 1) {
+        result *= base;
+    }
+    return result;
+}

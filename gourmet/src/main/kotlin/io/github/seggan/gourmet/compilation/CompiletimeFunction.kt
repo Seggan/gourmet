@@ -31,14 +31,14 @@ enum class CompiletimeFunction(val signature: Signature) {
         override fun IrGenerator.compile(function: AstNode.FunctionCall<TypeData>) = buildBlock {
             val literal = function.args.single()
             if (literal !is AstNode.StringLiteral) {
-                throw CompilationException("asm requires a string literal", literal.location)
+                throw CompilationException("asm requires a string literal", literal.extra.location)
             }
             val value = literal.value
             val mangled = variableReplacementRegex.replace(value) {
                 val name = it.groupValues[1]
                 val part = it.groupValues.getOrNull(2)?.toIntOrNull() ?: 0
                 val variable = getVariable(name)
-                    ?: throw CompilationException("Variable not found: $name", literal.location)
+                    ?: throw CompilationException("Variable not found: $name", literal.extra.location)
                 '$' + variable.mapped[part]
             }
             +Insn.raw(mangled)

@@ -7,7 +7,7 @@ import io.github.seggan.gourmet.util.Location
 
 class TypeChecker private constructor(
     private val signature: Signature,
-    private val functionMap: Map<AstNode.Function<Unit>, Signature>,
+    private val functionMap: Map<AstNode.Function<Location>, Signature>,
     private val checked: MutableMap<Signature, AstNode.Function<TypeData>>,
     private val generics: Map<Type.Generic, Type>
 ) {
@@ -15,7 +15,7 @@ class TypeChecker private constructor(
     private val functions = functionMap.values + CompiletimeFunction.entries.map { it.signature } + signature
     private val scopes = ArrayDeque<MutableList<Pair<String, Type>>>()
 
-    private fun check(node: AstNode.Function<Unit>) {
+    private fun check(node: AstNode.Function<Location>) {
         val args = node.args.unzip().first.zip(signature.type.args)
         scopes.addFirst(args.toMutableList())
         val block = checkBlock(node.body)
@@ -27,19 +27,18 @@ class TypeChecker private constructor(
             node.args,
             node.returnType,
             block,
-            node.location,
-            TypeData.Basic(signature.type)
+            TypeData.Basic(signature.type, node.extra)
         )
     }
 
-    private fun checkBlock(node: AstNode.Block<Unit>): AstNode.Block<TypeData> {
+    private fun checkBlock(node: AstNode.Block<Location>): AstNode.Block<TypeData> {
         scopes.addFirst(mutableListOf())
         val statements = node.statements.map(::checkStatement)
         scopes.removeFirst()
-        return AstNode.Block(statements, node.location, TypeData.Empty)
+        return AstNode.Block(statements, TypeData.Empty(node.extra))
     }
 
-    private fun checkStatement(node: AstNode.Statement<Unit>): AstNode.Statement<TypeData> {
+    private fun checkStatement(node: AstNode.Statement<Location>): AstNode.Statement<TypeData> {
         return when (node) {
             is AstNode.Declaration -> checkDeclaration(node)
             is AstNode.Assignment -> checkAssignment(node)
@@ -53,128 +52,122 @@ class TypeChecker private constructor(
         }
     }
 
-    private fun checkDeclaration(node: AstNode.Declaration<Unit>): AstNode.Declaration<TypeData> {
+    private fun checkDeclaration(node: AstNode.Declaration<Location>): AstNode.Declaration<TypeData> {
         val value = node.value?.let(::checkExpression)
-        val type = node.type?.resolve(node.location, generics)
+        val type = node.type?.resolve(node.extra, generics)
             ?: value?.realType
-            ?: throw TypeException("Cannot infer type of declaration", node.location)
+            ?: throw TypeException("Cannot infer type of declaration", node.extra)
         if (value != null && !value.realType.isAssignableTo(type)) {
-            throw TypeException("Cannot assign ${value.realType} to $type", node.location)
+            throw TypeException("Cannot assign ${value.realType} to $type", node.extra)
         }
         scopes.first().add(node.name to type)
-        return AstNode.Declaration(node.name, node.type, value, node.location, TypeData.Basic(type))
+        return AstNode.Declaration(node.name, node.type, value, TypeData.Basic(type, node.extra))
     }
 
-    private fun checkAssignment(node: AstNode.Assignment<Unit>): AstNode.Assignment<TypeData> {
+    private fun checkAssignment(node: AstNode.Assignment<Location>): AstNode.Assignment<TypeData> {
         val value = checkExpression(node.value)
-        var type = findVariable(node.name, node.location)
+        var type = findVariable(node.name, node.extra)
         if (node.isPointer) {
             if (type is Type.Pointer) {
                 type = type.target
             } else {
-                throw TypeException("Cannot assign to non-pointer type", node.location)
+                throw TypeException("Cannot assign to non-pointer type", node.extra)
             }
         }
         val assignOp = node.assignType.op
         if (assignOp == null) {
             if (!value.realType.isAssignableTo(type)) {
-                throw TypeException("Cannot assign ${value.realType} to $type", node.location)
+                throw TypeException("Cannot assign ${value.realType} to $type", node.extra)
             }
         } else {
-            assignOp.checkType(type, value.realType, node.location)
+            assignOp.checkType(type, value.realType, node.extra)
         }
         return AstNode.Assignment(
             node.isPointer,
             node.name,
             node.assignType,
             value,
-            node.location,
-            TypeData.Empty
+            TypeData.Empty(node.extra)
         )
     }
 
-    private fun checkReturn(node: AstNode.Return<Unit>): AstNode.Return<TypeData> {
+    private fun checkReturn(node: AstNode.Return<Location>): AstNode.Return<TypeData> {
         val value = node.value?.let(::checkExpression)
         val valueType = value?.realType ?: Type.Unit
         val returnType = signature.type.returnType
         if (!valueType.isAssignableTo(returnType)) {
             throw TypeException(
                 "Cannot return $valueType from function with return type $returnType",
-                node.location
+                node.extra
             )
         }
-        return AstNode.Return(value, node.location, TypeData.Basic(returnType))
+        return AstNode.Return(value, TypeData.Basic(returnType, node.extra))
     }
 
-    private fun checkIf(node: AstNode.If<Unit>): AstNode.If<TypeData> {
+    private fun checkIf(node: AstNode.If<Location>): AstNode.If<TypeData> {
         val condition = checkExpression(node.condition)
         if (!condition.realType.isAssignableTo(Type.Primitive.BOOLEAN)) {
-            throw TypeException("Condition must be a boolean", condition.location)
+            throw TypeException("Condition must be a boolean", condition.extra.location)
         }
         val thenBlock = checkStatement(node.thenBody)
         val elseBlock = node.elseBody?.let(::checkStatement)
-        return AstNode.If(condition, thenBlock, elseBlock, node.location, TypeData.Empty)
+        return AstNode.If(condition, thenBlock, elseBlock, TypeData.Empty(node.extra))
     }
 
-    private fun checkWhile(node: AstNode.While<Unit>): AstNode.While<TypeData> {
+    private fun checkWhile(node: AstNode.While<Location>): AstNode.While<TypeData> {
         val condition = checkExpression(node.condition)
         if (!condition.realType.isAssignableTo(Type.Primitive.BOOLEAN)) {
-            throw TypeException("Condition must be a boolean", condition.location)
+            throw TypeException("Condition must be a boolean", condition.extra.location)
         }
         val block = checkStatement(node.body)
-        return AstNode.While(condition, block, node.location, TypeData.Empty)
+        return AstNode.While(condition, block, TypeData.Empty(node.extra))
     }
 
-    private fun checkDoWhile(node: AstNode.DoWhile<Unit>): AstNode.DoWhile<TypeData> {
+    private fun checkDoWhile(node: AstNode.DoWhile<Location>): AstNode.DoWhile<TypeData> {
         val block = checkStatement(node.body)
         val condition = checkExpression(node.condition)
         if (!condition.realType.isAssignableTo(Type.Primitive.BOOLEAN)) {
-            throw TypeException("Condition must be a boolean", condition.location)
+            throw TypeException("Condition must be a boolean", condition.extra.location)
         }
-        return AstNode.DoWhile(block, condition, node.location, TypeData.Empty)
+        return AstNode.DoWhile(block, condition, TypeData.Empty(node.extra))
     }
 
-    private fun checkFor(node: AstNode.For<Unit>): AstNode.For<TypeData> {
+    private fun checkFor(node: AstNode.For<Location>): AstNode.For<TypeData> {
         val init = node.init?.let(::checkStatement)
         val condition = checkExpression(node.condition)
         if (!condition.realType.isAssignableTo(Type.Primitive.BOOLEAN)) {
-            throw TypeException("Condition must be a boolean", condition.location)
+            throw TypeException("Condition must be a boolean", condition.extra.location)
         }
         val update = node.update?.let(::checkStatement)
         val block = checkStatement(node.body)
-        return AstNode.For(init, condition, update, block, node.location, TypeData.Empty)
+        return AstNode.For(init, condition, update, block, TypeData.Empty(node.extra))
     }
 
-    private fun checkExpression(node: AstNode.Expression<Unit>): AstNode.Expression<TypeData> {
+    private fun checkExpression(node: AstNode.Expression<Location>): AstNode.Expression<TypeData> {
         return when (node) {
             is AstNode.BooleanLiteral -> AstNode.BooleanLiteral(
                 node.value,
-                node.location,
-                TypeData.Basic(Type.Primitive.BOOLEAN)
+                TypeData.Basic(Type.Primitive.BOOLEAN, node.extra)
             )
 
             is AstNode.CharLiteral -> AstNode.CharLiteral(
                 node.value,
-                node.location,
-                TypeData.Basic(Type.Primitive.CHAR)
+                TypeData.Basic(Type.Primitive.CHAR, node.extra)
             )
 
             is AstNode.NumberLiteral -> AstNode.NumberLiteral(
                 node.value,
-                node.location,
-                TypeData.Basic(Type.Primitive.NUMBER)
+                TypeData.Basic(Type.Primitive.NUMBER, node.extra)
             )
 
             is AstNode.StringLiteral -> AstNode.StringLiteral(
                 node.value,
-                node.location,
-                TypeData.Basic(Type.STRING)
+                TypeData.Basic(Type.STRING, node.extra)
             )
 
             is AstNode.Variable -> AstNode.Variable(
                 node.name,
-                node.location,
-                TypeData.Basic(findVariable(node.name, node.location))
+                TypeData.Basic(findVariable(node.name, node.extra), node.extra)
             )
 
             is AstNode.BinaryExpression -> checkBinaryExpression(node)
@@ -184,50 +177,50 @@ class TypeChecker private constructor(
         }
     }
 
-    private fun checkBinaryExpression(node: AstNode.BinaryExpression<Unit>): AstNode.BinaryExpression<TypeData> {
+    private fun checkBinaryExpression(node: AstNode.BinaryExpression<Location>): AstNode.BinaryExpression<TypeData> {
         val left = checkExpression(node.left)
         val right = checkExpression(node.right)
-        val type = node.operator.checkType(left.realType, right.realType, node.location)
-        return AstNode.BinaryExpression(left, node.operator, right, node.location, TypeData.Basic(type))
+        val type = node.operator.checkType(left.realType, right.realType, node.extra)
+        return AstNode.BinaryExpression(left, node.operator, right, TypeData.Basic(type, node.extra))
     }
 
-    private fun checkUnaryExpression(node: AstNode.UnaryExpression<Unit>): AstNode.UnaryExpression<TypeData> {
+    private fun checkUnaryExpression(node: AstNode.UnaryExpression<Location>): AstNode.UnaryExpression<TypeData> {
         val value = checkExpression(node.value)
-        val type = node.operator.checkType(value.realType, node.location)
-        return AstNode.UnaryExpression(node.operator, value, node.location, TypeData.Basic(type))
+        val type = node.operator.checkType(value.realType, node.extra)
+        return AstNode.UnaryExpression(node.operator, value, TypeData.Basic(type, node.extra))
     }
 
-    private fun checkFunctionCall(node: AstNode.FunctionCall<Unit>): AstNode.FunctionCall<TypeData> {
-        var exception = TypeException("Unknown function: ${node.name}", node.location)
+    private fun checkFunctionCall(node: AstNode.FunctionCall<Location>): AstNode.FunctionCall<TypeData> {
+        var exception = TypeException("Unknown function: ${node.name}", node.extra)
         outer@ for (function in functions) {
             if (function.name != node.name) continue
             var type = function.type
             if (node.genericArgs.size != type.genericArgs.size) {
                 exception = TypeException(
                     "Expected ${type.genericArgs.size} generic arguments, got ${node.genericArgs.size}",
-                    node.location
+                    node.extra
                 )
                 continue
             }
             if (node.args.size != type.args.size) {
-                exception = TypeException("Expected ${type.args.size} arguments, got ${node.args.size}", node.location)
+                exception = TypeException("Expected ${type.args.size} arguments, got ${node.args.size}", node.extra)
                 continue
             }
             val genericMap = type.genericArgs.map { it as Type.Generic }
-                .zip(node.genericArgs.map { it.resolve(node.location, generics) })
+                .zip(node.genericArgs.map { it.resolve(node.extra, generics) })
                 .toMap()
             for ((generic, provided) in genericMap) {
                 type = type.fillGeneric(generic, provided) as Type.Function
             }
             if (type.genericArgs.any { it is Type.Generic }) {
-                exception = TypeException("Generic arguments not fully resolved", node.location)
+                exception = TypeException("Generic arguments not fully resolved", node.extra)
                 continue
             }
             val args = node.args.map(::checkExpression)
             for ((arg, provided) in type.args.zip(args)) {
                 val providedType = provided.realType
                 if (!providedType.isAssignableTo(arg)) {
-                    exception = TypeException("Cannot pass $providedType to $arg", provided.location)
+                    exception = TypeException("Cannot pass $providedType to $arg", provided.extra.location)
                     continue@outer
                 }
             }
@@ -247,20 +240,19 @@ class TypeChecker private constructor(
                 node.name,
                 node.genericArgs,
                 args,
-                node.location,
-                TypeData.FunctionCall(type.returnType, type, function)
+                TypeData.FunctionCall(type.returnType, type, function, node.extra)
             )
         }
         throw exception
     }
 
-    private fun checkMemberAccess(node: AstNode.MemberAccess<Unit>): AstNode.MemberAccess<TypeData> {
+    private fun checkMemberAccess(node: AstNode.MemberAccess<Location>): AstNode.MemberAccess<TypeData> {
         val expr = checkExpression(node.target)
         val type = expr.realType as? Type.Structure
-            ?: throw TypeException("Cannot access member of non-structure type", node.location)
+            ?: throw TypeException("Cannot access member of non-structure type", node.extra)
         val member = type.fields.firstOrNull { it.first == node.member }
-            ?: throw TypeException("Unknown member: ${node.member}", node.location)
-        return AstNode.MemberAccess(expr, node.member, node.location, TypeData.Basic(member.second))
+            ?: throw TypeException("Unknown member: ${node.member}", node.extra)
+        return AstNode.MemberAccess(expr, node.member, TypeData.Basic(member.second, node.extra))
     }
 
     private fun findVariable(name: String, location: Location): Type {
@@ -275,12 +267,12 @@ class TypeChecker private constructor(
     }
 
     companion object {
-        fun check(functions: List<AstNode.Function<Unit>>): TypedAst {
+        fun check(functions: List<AstNode.Function<Location>>): TypedAst {
             val functionMap = functions.associateWith { node ->
                 val genericArgs = node.genericArgs.map { Type.Generic(it) }
                 val genericMap = genericArgs.zip(genericArgs).toMap()
-                val args = node.args.map { (_, type) -> type.resolve(node.location, genericMap) }
-                val returnType = node.returnType?.resolve(node.location, genericMap) ?: Type.Unit
+                val args = node.args.map { (_, type) -> type.resolve(node.extra, genericMap) }
+                val returnType = node.returnType?.resolve(node.extra, genericMap) ?: Type.Unit
                 Signature(node.name, Type.Function(genericArgs, args, returnType))
             }
             val checked = mutableMapOf<Signature, AstNode.Function<TypeData>>()

@@ -28,6 +28,7 @@ IN: 'in';
 BREAK: 'break';
 CONTINUE: 'continue';
 RETURN: 'return';
+STRUCT: 'struct';
 
 LPAREN: '(';
 RPAREN: ')';

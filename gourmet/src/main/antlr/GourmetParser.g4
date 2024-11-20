@@ -7,7 +7,15 @@ options { tokenVocab = GourmetLexer; }
 }
 
 file
-    : function* EOF
+    : (function | struct)* EOF
+    ;
+
+struct
+    : STRUCT name=type LBRACE (field SEMICOLON)* RBRACE
+    ;
+
+field
+    : Identifier COLON type
     ;
 
 function

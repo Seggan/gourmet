@@ -2,15 +2,26 @@ package io.github.seggan.gourmet.parsing
 
 import io.github.seggan.gourmet.antlr.GourmetParser
 import io.github.seggan.gourmet.antlr.GourmetParserBaseVisitor
+import io.github.seggan.gourmet.util.Location
 import io.github.seggan.gourmet.util.location
 
-object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
+object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Location>>() {
 
-    override fun visitFile(ctx: GourmetParser.FileContext): AstNode.File<Unit> {
-        return AstNode.File(ctx.function().map(::visitFunction), ctx.location, Unit)
+    override fun visitFile(ctx: GourmetParser.FileContext): AstNode.File<Location> {
+        return AstNode.File(
+            ctx.function().map(::visitFunction),
+            ctx.struct().map(::visitStruct),
+            ctx.location
+        )
     }
 
-    override fun visitFunction(ctx: GourmetParser.FunctionContext): AstNode.Function<Unit> {
+    override fun visitStruct(ctx: GourmetParser.StructContext): AstNode.Struct<Location> {
+        val name = TypeName.parse(ctx.name)
+        val fields = ctx.field().map { it.Identifier().text to TypeName.parse(it.type()) }
+        return AstNode.Struct(name, fields, ctx.location)
+    }
+
+    override fun visitFunction(ctx: GourmetParser.FunctionContext): AstNode.Function<Location> {
         val attributes = ctx.attribute().map { it.Identifier().text }.toSet()
         val name = ctx.name.text
         val genericArgs = ctx.gen.map { it.text }
@@ -20,7 +31,7 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
         if (!returns(block)) {
             val location = ctx.location
             if (returnType == null || returnType == TypeName.Simple("Unit")) {
-                val newStatements = block.statements + AstNode.Return(null, location, Unit)
+                val newStatements = block.statements + AstNode.Return(null, location)
                 block = block.copy(statements = newStatements)
             } else {
                 throw SyntaxException(
@@ -30,108 +41,103 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
                 )
             }
         }
-        return AstNode.Function(attributes, name, genericArgs, args, returnType, block, ctx.location, Unit)
+        return AstNode.Function(attributes, name, genericArgs, args, returnType, block, ctx.location)
     }
 
-    override fun visitBlock(ctx: GourmetParser.BlockContext): AstNode.Block<Unit> {
-        return AstNode.Block(ctx.statement().map(::visitStatement), ctx.location, Unit)
+    override fun visitBlock(ctx: GourmetParser.BlockContext): AstNode.Block<Location> {
+        return AstNode.Block(ctx.statement().map(::visitStatement), ctx.location)
     }
 
-    override fun visitStatement(ctx: GourmetParser.StatementContext): AstNode.Statement<Unit> {
-        return visit(ctx.getChild(0)) as AstNode.Statement<Unit>
+    override fun visitStatement(ctx: GourmetParser.StatementContext): AstNode.Statement<Location> {
+        return visit(ctx.getChild(0)) as AstNode.Statement<Location>
     }
 
-    override fun visitDeclaration(ctx: GourmetParser.DeclarationContext): AstNode.Statement<Unit> {
+    override fun visitDeclaration(ctx: GourmetParser.DeclarationContext): AstNode.Statement<Location> {
         val name = ctx.Identifier().text
         val type = ctx.type()?.let(TypeName::parse)
         val expression = ctx.expression()?.let(::visitExpression)
-        return AstNode.Declaration(name, type, expression, ctx.location, Unit)
+        return AstNode.Declaration(name, type, expression, ctx.location)
     }
 
-    override fun visitAssignment(ctx: GourmetParser.AssignmentContext): AstNode.Statement<Unit> {
+    override fun visitAssignment(ctx: GourmetParser.AssignmentContext): AstNode.Statement<Location> {
         val isPointer = ctx.STAR() != null
         val name = ctx.Identifier().text
         val value = visitExpression(ctx.expression())
         val assignType = AssignType.fromToken(ctx.assignType)
-        return AstNode.Assignment(isPointer, name, assignType, value, ctx.location, Unit)
+        return AstNode.Assignment(isPointer, name, assignType, value, ctx.location)
     }
 
-    override fun visitReturn(ctx: GourmetParser.ReturnContext): AstNode.Statement<Unit> {
+    override fun visitReturn(ctx: GourmetParser.ReturnContext): AstNode.Statement<Location> {
         val value = ctx.expression()?.let(::visitExpression)
-        return AstNode.Return(value, ctx.location, Unit)
+        return AstNode.Return(value, ctx.location)
     }
 
-    override fun visitIf(ctx: GourmetParser.IfContext): AstNode.Statement<Unit> {
+    override fun visitIf(ctx: GourmetParser.IfContext): AstNode.Statement<Location> {
         val condition = visitExpression(ctx.ifCond)
         val thenBlock = visitStatement(ctx.ifBlock)
         val elseBlock = ctx.elseBlock?.let(::visitStatement)
-        return AstNode.If(condition, thenBlock, elseBlock, ctx.location, Unit)
+        return AstNode.If(condition, thenBlock, elseBlock, ctx.location)
     }
 
-    override fun visitFor(ctx: GourmetParser.ForContext): AstNode.Statement<Unit> {
+    override fun visitFor(ctx: GourmetParser.ForContext): AstNode.Statement<Location> {
         val init = ctx.declaration()?.let(::visitDeclaration) ?: ctx.init?.let(::visitAssignment)
-        val condition = ctx.cond?.let(::visitExpression) ?: AstNode.BooleanLiteral(true, ctx.location, Unit)
+        val condition = ctx.cond?.let(::visitExpression) ?: AstNode.BooleanLiteral(true, ctx.location)
         return AstNode.For(
             init,
             condition,
             ctx.update?.let(::visitAssignment),
             visitStatement(ctx.body),
-            ctx.location,
-            Unit
+            ctx.location
         )
     }
 
-    override fun visitWhile(ctx: GourmetParser.WhileContext): AstNode.Statement<Unit> {
+    override fun visitWhile(ctx: GourmetParser.WhileContext): AstNode.Statement<Location> {
         val condition = visitExpression(ctx.expression())
         val block = visitStatement(ctx.statement())
-        return AstNode.While(condition, block, ctx.location, Unit)
+        return AstNode.While(condition, block, ctx.location)
     }
 
-    override fun visitDoWhile(ctx: GourmetParser.DoWhileContext): AstNode.Statement<Unit> {
+    override fun visitDoWhile(ctx: GourmetParser.DoWhileContext): AstNode.Statement<Location> {
         val block = visitStatement(ctx.statement())
         val condition = visitExpression(ctx.expression())
-        return AstNode.DoWhile(block, condition, ctx.location, Unit)
+        return AstNode.DoWhile(block, condition, ctx.location)
     }
 
-    override fun visitExpression(ctx: GourmetParser.ExpressionContext): AstNode.Expression<Unit> {
+    override fun visitExpression(ctx: GourmetParser.ExpressionContext): AstNode.Expression<Location> {
         return when {
             ctx.primary() != null -> visitPrimary(ctx.primary())
             ctx.DOT() != null -> AstNode.MemberAccess(
                 visitExpression(ctx.expression(0)),
                 ctx.Identifier().text,
-                ctx.location,
-                Unit
+                ctx.location
             )
 
             ctx.prefixOp != null -> AstNode.UnaryExpression(
                 UnOp.fromToken(ctx.prefixOp),
                 visitExpression(ctx.expression(0)),
-                ctx.location,
-                Unit
+                ctx.location
             )
 
             ctx.op != null -> AstNode.BinaryExpression(
                 visitExpression(ctx.expression(0)),
                 BinOp.fromToken(ctx.op),
                 visitExpression(ctx.expression(1)),
-                ctx.location,
-                Unit
+                ctx.location
             )
 
             else -> error("Unexpected expression: $ctx")
         }
     }
 
-    override fun visitPrimary(ctx: GourmetParser.PrimaryContext): AstNode.Expression<Unit> {
+    override fun visitPrimary(ctx: GourmetParser.PrimaryContext): AstNode.Expression<Location> {
         return when {
             ctx.paren != null -> visitExpression(ctx.paren)
 
-            ctx.variable != null -> AstNode.Variable(ctx.variable.text, ctx.location, Unit)
+            ctx.variable != null -> AstNode.Variable(ctx.variable.text, ctx.location)
 
             ctx.Number() != null -> AstNode.NumberLiteral(
                 ctx.Number().text.toBigDecimal(),
-                ctx.location,
-                Unit
+                ctx.location
             )
 
             ctx.string() != null -> {
@@ -143,7 +149,7 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
                         if (!raw) {
                             text = unescapeString(text)
                         }
-                        AstNode.StringLiteral(text, ctx.location, Unit)
+                        AstNode.StringLiteral(text, ctx.location)
                     }
 
                     stringObj.MultilineString() != null -> {
@@ -151,7 +157,7 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
                         if (!raw) {
                             text = unescapeString(text.trimIndent())
                         }
-                        AstNode.StringLiteral(text, ctx.location, Unit)
+                        AstNode.StringLiteral(text, ctx.location)
                     }
 
                     else -> throw AssertionError()
@@ -160,22 +166,19 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Unit>>() {
 
             ctx.Char() != null -> AstNode.CharLiteral(
                 unescapeString(ctx.Char().text.drop(1).dropLast(1)).single(),
-                ctx.location,
-                Unit
+                ctx.location
             )
 
             ctx.Boolean() != null -> AstNode.BooleanLiteral(
                 ctx.Boolean().text.toBoolean(),
-                ctx.location,
-                Unit
+                ctx.location
             )
 
             ctx.fn != null -> AstNode.FunctionCall(
                 ctx.fn.text,
                 ctx.generic()?.type()?.map(TypeName::parse) ?: emptyList(),
                 ctx.expression().map(::visitExpression),
-                ctx.location,
-                Unit
+                ctx.location
             )
 
             else -> throw AssertionError()
@@ -216,7 +219,7 @@ private fun unescapeString(str: String): String {
     return builder.toString()
 }
 
-private fun returns(statement: AstNode.Statement<Unit>): Boolean {
+private fun returns(statement: AstNode.Statement<Location>): Boolean {
     return when (statement) {
         is AstNode.Assignment -> false
         is AstNode.Block -> statement.statements.lastOrNull()?.let(::returns) ?: false

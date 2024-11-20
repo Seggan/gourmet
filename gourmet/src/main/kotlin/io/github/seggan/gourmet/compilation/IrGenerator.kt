@@ -76,7 +76,7 @@ class IrGenerator private constructor(private val checked: TypedAst) {
 
     private fun compileAssignment(node: AstNode.Assignment<TypeData>) = buildBlock {
         val variable = getVariable(node.name)
-            ?: throw CompilationException("Variable not found: ${node.name}", node.location)
+            ?: throw CompilationException("Variable not found: ${node.name}", node.extra.location)
         val op = node.assignType.op
         if (op == null) {
             +compileExpression(node.value)
@@ -98,7 +98,7 @@ class IrGenerator private constructor(private val checked: TypedAst) {
 
     private fun compileDeclaration(node: AstNode.Declaration<TypeData>) = buildBlock {
         if (getVariable(node.name) != null) {
-            throw CompilationException("Variable already declared: ${node.name}", node.location)
+            throw CompilationException("Variable already declared: ${node.name}", node.extra.location)
         }
         val variable = Variable.generate(node.name, node.realType)
         declaredVariables.first().add(variable)
@@ -196,7 +196,7 @@ class IrGenerator private constructor(private val checked: TypedAst) {
 
             is AstNode.Variable -> buildBlock {
                 val variable = getVariable(node.name)
-                    ?: throw CompilationException("Variable not found: ${node.name}", node.location)
+                    ?: throw CompilationException("Variable not found: ${node.name}", node.extra.location)
                 +variable.push()
             }
         }
@@ -210,7 +210,7 @@ class IrGenerator private constructor(private val checked: TypedAst) {
         }
         val signature = typeData.overload.copy(type = typeData.call)
         if (signature !in functions) {
-            throw CompilationException("Function not found: ${node.name}", node.location)
+            throw CompilationException("Function not found: ${node.name}", node.extra.location)
         }
         val argBlock = buildBlock {
             for (arg in node.args) {
