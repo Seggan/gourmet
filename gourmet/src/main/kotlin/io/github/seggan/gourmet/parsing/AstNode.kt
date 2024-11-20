@@ -11,10 +11,17 @@ sealed interface AstNode<T> {
         val functions: List<Function<T>>,
         val structs: List<Struct<T>>,
         override val extra: T
-    ) : AstNode<T>
+    ) : AstNode<T> {
+        operator fun plus(other: File<T>): File<T> = File(
+            functions = functions + other.functions,
+            structs = structs + other.structs,
+            extra = extra
+        )
+    }
 
     data class Struct<T>(
-        val name: TypeName,
+        val name: String,
+        val generics: List<String>,
         val fields: List<Pair<String, TypeName>>,
         override val extra: T
     ) : AstNode<T>

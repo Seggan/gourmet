@@ -11,7 +11,8 @@ file
     ;
 
 struct
-    : STRUCT name=type LBRACE (field SEMICOLON)* RBRACE
+    : STRUCT name=Identifier (LBRACKET gen+=Identifier (COMMA gen+=Identifier)* RBRACKET)?
+    LBRACE (field SEMICOLON)* RBRACE
     ;
 
 field

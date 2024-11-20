@@ -7,9 +7,10 @@ import io.github.seggan.gourmet.util.Location
 
 class TypeChecker private constructor(
     private val signature: Signature,
+    private val structs: Set<Type.Structure>,
     private val functionMap: Map<AstNode.Function<Location>, Signature>,
     private val checked: MutableMap<Signature, AstNode.Function<TypeData>>,
-    private val generics: Map<Type.Generic, Type>
+    private val generics: Map<Type, Type>
 ) {
 
     private val functions = functionMap.values + CompiletimeFunction.entries.map { it.signature } + signature
@@ -54,7 +55,7 @@ class TypeChecker private constructor(
 
     private fun checkDeclaration(node: AstNode.Declaration<Location>): AstNode.Declaration<TypeData> {
         val value = node.value?.let(::checkExpression)
-        val type = node.type?.resolve(node.extra, generics)
+        val type = node.type?.resolve(node.extra, structs, generics)
             ?: value?.realType
             ?: throw TypeException("Cannot infer type of declaration", node.extra)
         if (value != null && !value.realType.isAssignableTo(type)) {
@@ -206,12 +207,10 @@ class TypeChecker private constructor(
                 exception = TypeException("Expected ${type.args.size} arguments, got ${node.args.size}", node.extra)
                 continue
             }
-            val genericMap = type.genericArgs.map { it as Type.Generic }
-                .zip(node.genericArgs.map { it.resolve(node.extra, generics) })
+            val genericMap = type.genericArgs
+                .zip(node.genericArgs.map { it.resolve(node.extra, structs, generics) })
                 .toMap()
-            for ((generic, provided) in genericMap) {
-                type = type.fillGeneric(generic, provided) as Type.Function
-            }
+            type = type.fillGenerics(genericMap) as Type.Function
             if (type.genericArgs.any { it is Type.Generic }) {
                 exception = TypeException("Generic arguments not fully resolved", node.extra)
                 continue
@@ -230,6 +229,7 @@ class TypeChecker private constructor(
                     // monomorphize the function
                     TypeChecker(
                         signature,
+                        structs,
                         functionMap,
                         checked,
                         genericMap
@@ -267,19 +267,27 @@ class TypeChecker private constructor(
     }
 
     companion object {
-        fun check(functions: List<AstNode.Function<Location>>): TypedAst {
-            val functionMap = functions.associateWith { node ->
-                val genericArgs = node.genericArgs.map { Type.Generic(it) }
-                val genericMap = genericArgs.zip(genericArgs).toMap()
-                val args = node.args.map { (_, type) -> type.resolve(node.extra, genericMap) }
-                val returnType = node.returnType?.resolve(node.extra, genericMap) ?: Type.Unit
+        fun check(file: AstNode.File<Location>): TypedAst {
+            val structs = mutableSetOf<Type.Structure>()
+            for (node in file.structs) {
+                val genericArgs: List<Type> = node.generics.map { Type.Generic(it) }
+                val genericMap = genericArgs.associateWith { it }
+                val fields = node.fields.map { (name, typeName) ->
+                    name to typeName.resolve(node.extra, structs, genericMap)
+                }
+                structs += Type.Structure(node.name, genericArgs, fields)
+            }
+            val functionMap = file.functions.associateWith { node ->
+                val genericArgs: List<Type> = node.genericArgs.map { Type.Generic(it) }
+                val genericMap = genericArgs.associateWith { it }
+                val args = node.args.map { (_, type) -> type.resolve(node.extra, structs, genericMap) }
+                val returnType = node.returnType?.resolve(node.extra, structs, genericMap) ?: Type.Unit
                 Signature(node.name, Type.Function(genericArgs, args, returnType))
             }
             val checked = mutableMapOf<Signature, AstNode.Function<TypeData>>()
-            for (function in functions) {
-                val signature = functionMap[function]!!
+            for ((function, signature) in functionMap) {
                 if (signature.type.genericArgs.any { it is Type.Generic }) continue
-                TypeChecker(signature, functionMap, checked, emptyMap()).check(function)
+                TypeChecker(signature, structs, functionMap, checked, emptyMap()).check(function)
             }
             return TypedAst(checked)
         }
@@ -299,19 +307,31 @@ private val types = listOf(
     Type.STRING
 ).associateBy { it.tname }
 
-private fun TypeName.resolve(location: Location, generics: Map<Type.Generic, Type>): Type {
+private fun TypeName.resolve(
+    location: Location,
+    structs: Set<Type.Structure>,
+    genericMap: Map<Type, Type>
+): Type {
     return when (this) {
         is TypeName.Simple -> types[name]
-            ?: generics[Type.Generic(name)]
-            ?: throw TypeException(
-                "Unknown type: $name",
-                location
-            )
+            ?: structs.firstOrNull { it.tname == name && it.generics.isEmpty() }
+            ?: genericMap[Type.Generic(name)]
 
-        is TypeName.Pointer -> Type.Pointer(type.resolve(location, generics))
-        is TypeName.Generic -> Type.Generic(name)
-    }
+        is TypeName.Pointer -> Type.Pointer(type.resolve(location, structs, genericMap))
+        is TypeName.Generic -> structs.firstOrNull {
+            it.tname == name && it.generics.size == generics.size
+        }?.let { struct ->
+            val genericArgs = generics.map { it.resolve(location, structs, genericMap) }
+            struct.fillGenerics(struct.generics.zip(genericArgs).toMap())
+        }
+    } ?: throw TypeException(
+        "Unknown type: $name",
+        location
+    )
 }
 
-private fun Type.fillGenerics(generics: Map<Type, Type>) =
-    generics.entries.fold(this) { type, (generic, provided) -> type.fillGeneric(generic, provided) }
+private fun Type.fillGenerics(generics: Map<Type, Type>): Type {
+    return generics.entries.fold(this) { acc, (generic, provided) ->
+        acc.fillGeneric(generic, provided)
+    }
+}

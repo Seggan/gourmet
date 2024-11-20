@@ -65,14 +65,23 @@ sealed interface Type {
         override fun toString(): String = tname
     }
 
-    data class Structure(override val tname: String, val fields: List<Pair<String, Type>>) : Type {
-        override val size = fields.sumOf { it.second.size }
+    data class Structure(
+        override val tname: String,
+        val generics: List<Type>,
+        val fields: List<Pair<String, Type>>
+    ) : Type {
+        override val size get() = fields.sumOf { it.second.size }
 
         override fun fillGeneric(generic: Type, type: Type): Type {
-            return Structure(tname, fields.map { (name, type) -> name to type.fillGeneric(generic, type) })
+            return Structure(
+                tname,
+                generics.map { it.fillGeneric(generic, type) },
+                fields.map { (name, oldType) -> name to oldType.fillGeneric(generic, type) }
+            )
         }
 
-        override fun toString(): String = tname
+        override fun toString(): String =
+            tname + generics.joinToString(prefix = "[", postfix = "]", separator = ", ") { it.tname }
     }
 
     data class Generic(override val tname: String) : Type {
@@ -106,7 +115,8 @@ sealed interface Type {
     fun fillGeneric(generic: Type, type: Type): Type
 
     companion object {
-        val STRING = Structure("String", listOf("length" to Primitive.NUMBER, "data" to Pointer(Primitive.CHAR)))
+        val STRING =
+            Structure("String", emptyList(), listOf("length" to Primitive.NUMBER, "data" to Pointer(Primitive.CHAR)))
     }
 }
 

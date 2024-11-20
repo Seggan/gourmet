@@ -16,9 +16,10 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Location>>() {
     }
 
     override fun visitStruct(ctx: GourmetParser.StructContext): AstNode.Struct<Location> {
-        val name = TypeName.parse(ctx.name)
+        val name = ctx.name.text
+        val generics = ctx.gen.map { it.text }
         val fields = ctx.field().map { it.Identifier().text to TypeName.parse(it.type()) }
-        return AstNode.Struct(name, fields, ctx.location)
+        return AstNode.Struct(name, generics, fields, ctx.location)
     }
 
     override fun visitFunction(ctx: GourmetParser.FunctionContext): AstNode.Function<Location> {

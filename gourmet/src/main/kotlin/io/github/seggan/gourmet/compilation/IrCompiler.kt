@@ -43,6 +43,7 @@ class IrCompiler private constructor(private val functions: List<CompiledFunctio
             sb.appendLine(block.lines().joinToString("\n") { "  $it" }.trimEnd())
         }
         sb.appendLine("};")
+        sb.appendLine("flush;")
         return sb.toString()
     }
 

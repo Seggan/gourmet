@@ -33,8 +33,8 @@ fun main(args: Array<String>) {
     Path("${file.nameWithoutExtension}.recipe").writeText(asm)
 }
 
-private fun getAst(fileName: String, file: InputStream): List<AstNode.Function<Location>> {
+private fun getAst(fileName: String, file: InputStream): AstNode.File<Location> {
     Location.currentFile = fileName
     val parser = GourmetParser(CommonTokenStream(GourmetLexer(CharStreams.fromStream(file))))
-    return GourmetVisitor.visitFile(parser.file()).functions
+    return GourmetVisitor.visitFile(parser.file())
 }
