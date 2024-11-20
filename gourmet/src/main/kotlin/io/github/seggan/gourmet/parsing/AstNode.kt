@@ -142,6 +142,12 @@ sealed interface AstNode<T> {
         val member: String,
         override val extra: T
     ) : Expression<T>
+
+    data class StructInstance<T>(
+        val type: TypeName,
+        val values: List<Pair<String, Expression<T>>>,
+        override val extra: T
+    ) : Expression<T>
 }
 
 fun AstNode<*>.stringify(): String = stringify(this)

@@ -11,7 +11,7 @@ object PeepholeOptimizer {
                 """(\w+) \{ nop; \};"""
             ) to """$2 $1;""",
             listOf(
-                """\s+push .+?;""",
+                """\s*push .+?;""",
                 """pop;"""
             ) to "",
         )

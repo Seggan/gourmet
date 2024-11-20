@@ -88,7 +88,16 @@ primary
     | string
     | Char
     | Boolean
+    | structInstance
     | fn=Identifier generic? LPAREN (expression (COMMA expression)*)? RPAREN
+    ;
+
+structInstance
+    : type LBRACE (fieldValue (COMMA fieldValue)*)? RBRACE
+    ;
+
+fieldValue
+    : Identifier ASSIGN expression
     ;
 
 string

@@ -175,6 +175,7 @@ class TypeChecker private constructor(
             is AstNode.UnaryExpression -> checkUnaryExpression(node)
             is AstNode.FunctionCall -> checkFunctionCall(node)
             is AstNode.MemberAccess -> checkMemberAccess(node)
+            is AstNode.StructInstance -> checkStructInstance(node)
         }
     }
 
@@ -253,6 +254,29 @@ class TypeChecker private constructor(
         val member = type.fields.firstOrNull { it.first == node.member }
             ?: throw TypeException("Unknown member: ${node.member}", node.extra)
         return AstNode.MemberAccess(expr, node.member, TypeData.Basic(member.second, node.extra))
+    }
+
+    private fun checkStructInstance(node: AstNode.StructInstance<Location>): AstNode.StructInstance<TypeData> {
+        val type = node.type.resolve(node.extra, structs, generics)
+        if (type !is Type.Structure) {
+            throw TypeException("Cannot create instance of non-structure type", node.extra)
+        }
+        if (node.values.size != type.fields.size) {
+            throw TypeException(
+                "Expected ${type.fields.size} fields, got ${node.values.size}",
+                node.extra
+            )
+        }
+        val values = node.values.map { (name, value) ->
+            val typedValue = checkExpression(value)
+            val valueType = typedValue.realType
+            val fieldType = type.fields.first { it.first == name }.second
+            if (!valueType.isAssignableTo(fieldType)) {
+                throw TypeException("Cannot assign $valueType to $fieldType", value.extra)
+            }
+            name to typedValue
+        }
+        return AstNode.StructInstance(node.type, values, TypeData.Basic(type, node.extra))
     }
 
     private fun findVariable(name: String, location: Location): Type {

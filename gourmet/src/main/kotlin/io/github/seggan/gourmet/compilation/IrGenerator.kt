@@ -189,6 +189,7 @@ class IrGenerator private constructor(private val checked: TypedAst) {
             is AstNode.MemberAccess -> TODO()
             is AstNode.NumberLiteral -> buildBlock { +Insn.Push(node.value) }
             is AstNode.StringLiteral -> TODO()
+            is AstNode.StructInstance -> compileStructInstance(node)
             is AstNode.UnaryExpression -> buildBlock {
                 +compileExpression(node.value)
                 +with(node.operator) { compile(node.value.realType) }
@@ -242,6 +243,18 @@ class IrGenerator private constructor(private val checked: TypedAst) {
             }
             callBlock.second.continuation = Continuation.Call(signature, restoreBlock.first)
             return callBlock.first to restoreBlock.second
+        }
+    }
+
+    private fun compileStructInstance(node: AstNode.StructInstance<TypeData>) = buildBlock {
+        val type = node.realType as Type.Structure
+        val values = node.values.map { it.first to compileExpression(it.second) }
+        // Put them in the right order
+        val sorted = values.sortedBy {
+            type.fields.indexOfFirst { (name, _) -> name == it.first }
+        }.unzip().second
+        for (value in sorted) {
+            +value
         }
     }
 

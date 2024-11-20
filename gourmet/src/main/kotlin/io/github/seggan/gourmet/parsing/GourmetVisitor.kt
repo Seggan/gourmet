@@ -175,6 +175,13 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Location>>() {
                 ctx.location
             )
 
+            ctx.structInstance() != null -> {
+                val struct = ctx.structInstance()
+                val type = TypeName.parse(struct.type())
+                val values = struct.fieldValue().map { it.Identifier().text to visitExpression(it.expression()) }
+                AstNode.StructInstance(type, values, ctx.location)
+            }
+
             ctx.fn != null -> AstNode.FunctionCall(
                 ctx.fn.text,
                 ctx.generic()?.type()?.map(TypeName::parse) ?: emptyList(),
@@ -234,6 +241,7 @@ private fun returns(statement: AstNode.Statement<Location>): Boolean {
         is AstNode.MemberAccess -> false
         is AstNode.NumberLiteral -> false
         is AstNode.StringLiteral -> false
+        is AstNode.StructInstance -> false
         is AstNode.UnaryExpression -> false
         is AstNode.Variable -> false
         is AstNode.If -> returns(statement.thenBody) && (statement.elseBody?.let(::returns) ?: true)
