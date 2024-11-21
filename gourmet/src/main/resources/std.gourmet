@@ -48,3 +48,26 @@ fun pow(base: Number, exp: Number): Number {
     }
     return result;
 }
+
+struct Array[T] {
+    data: T*;
+    len: Number;
+}
+
+fun get[T](arr: Array[T], index: Number): T {
+    let ptr = transmute[Number, T*](transmute[T*, Number](arr.data) + index * sizeof[T]());
+    return *ptr;
+}
+
+fun set[T](arr: Array[T], index: Number, value: T) {
+    let ptr = transmute[Number, T*](transmute[T*, Number](arr.data) + index * sizeof[T]());
+    *ptr = value;
+}
+
+fun newArray[T](len: Number): Array[T] {
+    let data = alloc[T](len);
+    return Array[T] {
+        .data = data,
+        .len = len
+    };
+}

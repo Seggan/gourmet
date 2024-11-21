@@ -98,7 +98,7 @@ structInstance
     ;
 
 fieldValue
-    : Identifier ASSIGN expression
+    : DOT Identifier ASSIGN expression
     ;
 
 string
