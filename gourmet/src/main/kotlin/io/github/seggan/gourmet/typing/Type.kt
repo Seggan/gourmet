@@ -120,8 +120,11 @@ sealed interface Type {
     fun fillGeneric(generic: Type, type: Type): Type
 
     companion object {
-        val STRING =
-            Structure("String", emptyList(), listOf("length" to Primitive.NUMBER, "data" to Pointer(Primitive.CHAR)))
+        val STRING = Structure(
+            "String",
+            emptyList(),
+            listOf("data" to Pointer(Primitive.CHAR), "len" to Primitive.NUMBER)
+        )
     }
 }
 

@@ -15,6 +15,7 @@ class IrGenerator private constructor(private val checked: TypedAst) {
     private val compiledFunctions = mutableListOf<CompiledFunction>()
 
     private val noinline = mutableSetOf<Signature>()
+    private val stringLiterals = mutableListOf<String>()
 
     private fun compile(): List<CompiledFunction> {
         checked.functions.values.forEach(::compileFunction)
@@ -215,7 +216,7 @@ class IrGenerator private constructor(private val checked: TypedAst) {
             is AstNode.FunctionCall -> compileCall(node)
             is AstNode.MemberAccess -> compileMemberAccess(node)
             is AstNode.NumberLiteral -> buildBlock { +Insn.Push(node.value) }
-            is AstNode.StringLiteral -> TODO()
+            is AstNode.StringLiteral -> compileStringLiteral(node)
             is AstNode.StructInstance -> compileStructInstance(node)
             is AstNode.UnaryExpression -> buildBlock {
                 +compileExpression(node.value)
@@ -271,6 +272,16 @@ class IrGenerator private constructor(private val checked: TypedAst) {
             callBlock.second.continuation = Continuation.Call(signature, restoreBlock.first)
             return callBlock.first to restoreBlock.second
         }
+    }
+
+    private fun compileStringLiteral(node: AstNode.StringLiteral<TypeData>) = buildBlock {
+        val literal = node.value
+        if (literal !in stringLiterals) {
+            stringLiterals.add(node.value)
+        }
+        val ptr = stringLiterals.take(stringLiterals.indexOf(literal)).sumOf { it.length }
+        +Insn.Push(ptr)
+        +Insn.Push(literal.length)
     }
 
     private fun compileStructInstance(node: AstNode.StructInstance<TypeData>) = buildBlock {
@@ -467,8 +478,9 @@ class IrGenerator private constructor(private val checked: TypedAst) {
 
         fun generate(
             checked: TypedAst,
-        ): List<CompiledFunction> {
-            return IrGenerator(checked).compile()
+        ): Pair<List<CompiledFunction>, List<String>> {
+            val generator = IrGenerator(checked)
+            return generator.compile() to generator.stringLiterals
         }
     }
 }

@@ -24,12 +24,12 @@ fun main(args: Array<String>) {
     val file = Path(args[0])
     val main = std + getAst(file.name, file.inputStream())
     val checked = TypeChecker.check(main)
-    val ir = IrGenerator.generate(checked)
+    val (ir, strings) = IrGenerator.generate(checked)
     val optimized = ir.map { it.copy(body = BlockOptimizer.optimize(it.body)) }
     val dot = optimized.joinToString("\n") { it.toGraph() }
     Path("graph.dot").writeText("digraph G { $dot }")
     Runtime.getRuntime().exec("dot -Tpng graph.dot -o graph.png")
-    val asm = PeepholeOptimizer.optimize(IrCompiler.compile(optimized))
+    val asm = PeepholeOptimizer.optimize(IrCompiler.compile(optimized, strings))
     Path("${file.nameWithoutExtension}.recipe").writeText(asm)
 }
 

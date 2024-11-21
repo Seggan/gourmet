@@ -14,7 +14,7 @@ class IrCompiler private constructor(private val functions: List<CompiledFunctio
 
     private val hoisted = mutableSetOf<Variable>()
 
-    private fun compile(): String {
+    private fun compile(stringLiterals: List<String>): String {
         for (block in allBlocks) {
             for (variable in block.declaredVariables) {
                 if (variable !in block.droppedVariables) {
@@ -31,7 +31,12 @@ class IrCompiler private constructor(private val functions: List<CompiledFunctio
         sb.appendLine("def @callStack;")
         sb.appendLine("def @heap;")
         sb.appendLine("def @antiHeap;")
-        sb.appendLine("def \$heapSize 0;")
+        for (literal in stringLiterals) {
+            for (char in literal) {
+                sb.appendLine("@heap.push ${char.code};")
+            }
+        }
+        sb.appendLine("def \$heapSize ${stringLiterals.sumOf { it.length }};")
         for (variable in hoisted) {
             for (part in variable.mapped) {
                 sb.appendLine("def $$part;")
@@ -106,8 +111,8 @@ class IrCompiler private constructor(private val functions: List<CompiledFunctio
     private val BasicBlock.state get() = blockStates[id]!!
 
     companion object {
-        fun compile(functions: List<CompiledFunction>): String {
-            return IrCompiler(functions).compile()
+        fun compile(functions: List<CompiledFunction>, stringLiterals: List<String>): String {
+            return IrCompiler(functions).compile(stringLiterals)
         }
     }
 }
