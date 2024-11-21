@@ -53,6 +53,7 @@ sealed interface AstNode<T> {
     data class Assignment<T>(
         val isPointer: Boolean,
         val name: String,
+        val target: String?,
         val assignType: AssignType,
         val value: Expression<T>,
         override val extra: T

@@ -75,6 +75,15 @@ class TypeChecker private constructor(
                 throw TypeException("Cannot assign to non-pointer type", node.extra)
             }
         }
+        val pointerlessType = type
+        if (node.target != null) {
+            if (type !is Type.Structure) {
+                throw TypeException("Cannot assign to member of non-structure type", node.extra)
+            }
+            val member = type.fields.firstOrNull { it.first == node.target }
+                ?: throw TypeException("Unknown member: ${node.target}", node.extra)
+            type = member.second
+        }
         val assignOp = node.assignType.op
         if (assignOp == null) {
             if (!value.realType.isAssignableTo(type)) {
@@ -86,9 +95,10 @@ class TypeChecker private constructor(
         return AstNode.Assignment(
             node.isPointer,
             node.name,
+            node.target,
             node.assignType,
             value,
-            TypeData.Empty(node.extra)
+            TypeData.Basic(pointerlessType, node.extra)
         )
     }
 

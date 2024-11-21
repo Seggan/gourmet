@@ -3,6 +3,7 @@ package io.github.seggan.gourmet.compilation
 import io.github.seggan.gourmet.compilation.ir.*
 import io.github.seggan.gourmet.parsing.AstNode
 import io.github.seggan.gourmet.typing.*
+import io.github.seggan.gourmet.util.randomString
 
 @Suppress("DuplicatedCode")
 class IrGenerator private constructor(private val checked: TypedAst) {
@@ -77,17 +78,43 @@ class IrGenerator private constructor(private val checked: TypedAst) {
     private fun compileAssignment(node: AstNode.Assignment<TypeData>) = buildBlock {
         val variable = getVariable(node.name)
             ?: throw CompilationException("Variable not found: ${node.name}", node.extra.location)
+        val trailingFields = mutableListOf<Variable>()
+        val targetSize = if (node.target != null) {
+            val struct = node.realType as Type.Structure
+            val targetIndex = struct.fields.indexOfFirst { (name, _) -> name == node.target }
+            for (i in targetIndex + 1 until struct.fields.size) {
+                val field = struct.fields[i]
+                val fieldVar = Variable.generate(field.first + randomString(), field.second)
+                trailingFields.add(fieldVar)
+                scopes.first().add(fieldVar)
+                declaredVariables.first().add(fieldVar)
+            }
+            struct.fields[targetIndex].second.size
+        } else {
+            null
+        }
+
         val op = node.assignType.op
         if (op == null) {
+            if (targetSize != null) {
+                +variable.push()
+                if (node.isPointer) {
+                    +getPointer(variable.type as Type.Pointer)
+                }
+                trailingFields.reversed().forEach { +it.pop() }
+                +repeatN(targetSize, listOf(Insn.Pop()))
+            }
             +compileExpression(node.value)
         } else {
             +variable.push()
             if (node.isPointer) {
                 +getPointer(variable.type as Type.Pointer)
             }
+            trailingFields.reversed().forEach { +it.pop() }
             +compileExpression(node.value)
             +op.compile()
         }
+        trailingFields.forEach { +it.push() }
         if (node.isPointer) {
             +variable.push()
             +setPointer(variable.type as Type.Pointer)
@@ -186,7 +213,7 @@ class IrGenerator private constructor(private val checked: TypedAst) {
             is AstNode.BooleanLiteral -> buildBlock { +Insn.Push(if (node.value) 1 else 0) }
             is AstNode.CharLiteral -> buildBlock { +Insn.Push(node.value.code) }
             is AstNode.FunctionCall -> compileCall(node)
-            is AstNode.MemberAccess -> TODO()
+            is AstNode.MemberAccess -> compileMemberAccess(node)
             is AstNode.NumberLiteral -> buildBlock { +Insn.Push(node.value) }
             is AstNode.StringLiteral -> TODO()
             is AstNode.StructInstance -> compileStructInstance(node)
@@ -258,6 +285,34 @@ class IrGenerator private constructor(private val checked: TypedAst) {
         }
     }
 
+    private fun compileMemberAccess(node: AstNode.MemberAccess<TypeData>) = buildBlock {
+        val type = node.target.realType as Type.Structure
+        val fieldIndex = type.fields.indexOfFirst { (name, _) -> name == node.member }
+        val field = type.fields[fieldIndex]
+        val fieldSize = field.second.size
+        val head = type.fields.take(fieldIndex).sumOf { it.second.size }
+
+        val target = node.target
+        if (target is AstNode.Variable) {
+            val variable = getVariable(target.name)
+                ?: throw CompilationException("Variable not found: ${target.name}", target.extra.location)
+            val parts = variable.mapped.subList(head, head + fieldSize)
+            for (part in parts) {
+                +Insn("push", Argument.Variable(part))
+            }
+        } else {
+            val tail = type.fields.drop(fieldIndex + 1).sumOf { it.second.size }
+            +compileExpression(node.target)
+            repeat(tail) {
+                +Insn.Pop()
+            }
+            +repeatN(fieldSize, listOf(Insn("rot", Argument.Number(head + fieldSize - 1))))
+            repeat(head) {
+                +Insn.Pop()
+            }
+        }
+    }
+
     fun getPointer(pointer: Type.Pointer) = buildBlock {
         val baseType = pointer.target
         val ptr = Argument.Variable("ptr")
@@ -277,9 +332,8 @@ class IrGenerator private constructor(private val checked: TypedAst) {
                 Insn("push", tempDeref, stack = STACK_ANTI_HEAP)
             )
         )
-        +Insn.Push(baseType.size)
-        +Insn(
-            "for", Argument.Block(
+        +repeatN(
+            baseType.size, listOf(
                 Insn("pop", tempDeref, stack = STACK_ANTI_HEAP),
                 Insn("push", tempDeref),
                 Insn("push", tempDeref, stack = STACK_HEAP)
@@ -317,9 +371,8 @@ class IrGenerator private constructor(private val checked: TypedAst) {
                 Insn("push", tempRef, stack = STACK_ANTI_HEAP)
             )
         )
-        +Insn.Push(baseType.size)
-        +Insn(
-            "for", Argument.Block(
+        +repeatN(
+            baseType.size, listOf(
                 Insn("pop", tempRef, stack = STACK_HEAP),
                 Insn("pop", tempRef),
                 Insn("push", tempRef, stack = STACK_ANTI_HEAP)
@@ -345,6 +398,17 @@ class IrGenerator private constructor(private val checked: TypedAst) {
             }
         }
         return null
+    }
+
+    private fun repeatN(n: Int, insns: List<Insn>): List<Insn> = buildList {
+        if (n == 0) {
+            return emptyList()
+        } else if (n <= insns.size * n + 3) {
+            repeat(n) { addAll(insns) }
+        } else {
+            add(Insn.Push(n))
+            add(Insn("for", Argument.Block(insns)))
+        }
     }
 
     inner class BlockBuilder {

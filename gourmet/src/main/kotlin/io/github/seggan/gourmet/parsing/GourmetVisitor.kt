@@ -62,10 +62,11 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Location>>() {
 
     override fun visitAssignment(ctx: GourmetParser.AssignmentContext): AstNode.Statement<Location> {
         val isPointer = ctx.STAR() != null
-        val name = ctx.Identifier().text
+        val name = ctx.name.text
+        val target = ctx.target?.text
         val value = visitExpression(ctx.expression())
         val assignType = AssignType.fromToken(ctx.assignType)
-        return AstNode.Assignment(isPointer, name, assignType, value, ctx.location)
+        return AstNode.Assignment(isPointer, name, target, assignType, value, ctx.location)
     }
 
     override fun visitReturn(ctx: GourmetParser.ReturnContext): AstNode.Statement<Location> {

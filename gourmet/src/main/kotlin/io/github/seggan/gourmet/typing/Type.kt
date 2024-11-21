@@ -80,8 +80,13 @@ sealed interface Type {
             )
         }
 
-        override fun toString(): String =
-            tname + generics.joinToString(prefix = "[", postfix = "]", separator = ", ") { it.tname }
+        override fun toString(): String {
+            var s = tname
+            if (generics.isNotEmpty()) {
+                s += generics.joinToString(prefix = "[", postfix = "]", separator = ", ") { it.tname }
+            }
+            return s
+        }
     }
 
     data class Generic(override val tname: String) : Type {

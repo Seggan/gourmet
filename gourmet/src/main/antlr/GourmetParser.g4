@@ -47,8 +47,9 @@ declaration
     ;
 
 assignment
-    : STAR? Identifier assignType=(ASSIGN | PLUS_ASSIGN | MINUS_ASSIGN | MULT_ASSIGN | DIV_ASSIGN | MOD_ASSIGN)
-     expression
+    : STAR? name=Identifier (DOT target=Identifier)?
+    assignType=(ASSIGN | PLUS_ASSIGN | MINUS_ASSIGN | MULT_ASSIGN | DIV_ASSIGN | MOD_ASSIGN)
+    expression
     ;
 
 if
