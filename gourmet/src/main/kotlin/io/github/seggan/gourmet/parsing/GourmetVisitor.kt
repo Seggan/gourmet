@@ -50,7 +50,11 @@ object GourmetVisitor : GourmetParserBaseVisitor<AstNode<Location>>() {
     }
 
     override fun visitStatement(ctx: GourmetParser.StatementContext): AstNode.Statement<Location> {
-        return visit(ctx.getChild(0)) as AstNode.Statement<Location>
+        return when {
+            ctx.BREAK() != null -> AstNode.Break(ctx.location)
+            ctx.CONTINUE() != null -> AstNode.Continue(ctx.location)
+            else -> visit(ctx.getChild(0)) as AstNode.Statement<Location>
+        }
     }
 
     override fun visitDeclaration(ctx: GourmetParser.DeclarationContext): AstNode.Statement<Location> {
@@ -232,6 +236,8 @@ private fun returns(statement: AstNode.Statement<Location>): Boolean {
     return when (statement) {
         is AstNode.Assignment -> false
         is AstNode.Block -> statement.statements.lastOrNull()?.let(::returns) ?: false
+        is AstNode.Break -> false
+        is AstNode.Continue -> false
         is AstNode.Declaration -> false
         is AstNode.DoWhile -> returns(statement.body)
         is AstNode.BinaryExpression -> false

@@ -6,6 +6,7 @@ import io.github.seggan.gourmet.compilation.ir.Continuation
 class BlockOptimizer private constructor(private val head: BasicBlock) {
 
     private val visited = mutableSetOf<BasicBlock>()
+    private val blockMap = mutableMapOf<String, BasicBlock>()
 
     private fun BasicBlock.optimizeBlock(): BasicBlock {
         if (this in visited) return this
@@ -21,19 +22,19 @@ class BlockOptimizer private constructor(private val head: BasicBlock) {
                     )
                     movePredecessorsTo(newBlock).optimizeBlock()
                 } else {
-                    continuation = cont.copy(block = cont.block.optimizeBlock())
+                    continuation = cont.copy(block = getLatestBlock(cont.block.optimizeBlock()))
                     this
                 }
             }
             is Continuation.Conditional -> {
                 continuation = cont.copy(
-                    then = cont.then.optimizeBlock(),
-                    otherwise = cont.otherwise.optimizeBlock()
+                    then = getLatestBlock(cont.then.optimizeBlock()),
+                    otherwise = getLatestBlock(cont.otherwise.optimizeBlock())
                 )
                 this
             }
             is Continuation.Call -> {
-                continuation = cont.copy(returnTo = cont.returnTo.optimizeBlock())
+                continuation = cont.copy(returnTo = getLatestBlock(cont.returnTo.optimizeBlock()))
                 this
             }
             is Continuation.Return -> this
@@ -41,10 +42,19 @@ class BlockOptimizer private constructor(private val head: BasicBlock) {
         }
     }
 
+    private fun getLatestBlock(block: BasicBlock): BasicBlock {
+        var latest = block
+        while (true) {
+            latest = blockMap[latest.id] ?: break
+        }
+        return latest
+    }
+
     private fun BasicBlock.movePredecessorsTo(newBlock: BasicBlock): BasicBlock {
         for (pred in predecessors) {
             pred.continuation = pred.continuation?.swap(this, newBlock)
         }
+        blockMap[this.id] = newBlock
         return newBlock
     }
 
@@ -53,8 +63,7 @@ class BlockOptimizer private constructor(private val head: BasicBlock) {
 
     companion object {
         fun optimize(head: BasicBlock): BasicBlock {
-            val newHead = with(BlockOptimizer(head)) { head.optimizeBlock() }
-            return newHead
+            return with(BlockOptimizer(head)) { head.optimizeBlock() }
         }
     }
 }

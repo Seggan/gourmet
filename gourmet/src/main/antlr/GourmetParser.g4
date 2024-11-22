@@ -38,7 +38,7 @@ block
     ;
 
 statement
-    : ((expression | declaration | assignment | return) SEMICOLON)
+    : ((expression | declaration | assignment | return | BREAK | CONTINUE) SEMICOLON)
     | block | if | doWhile | while | for
     ;
 

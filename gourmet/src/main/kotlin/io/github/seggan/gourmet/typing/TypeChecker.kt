@@ -49,6 +49,8 @@ class TypeChecker private constructor(
             is AstNode.DoWhile -> checkDoWhile(node)
             is AstNode.While -> checkWhile(node)
             is AstNode.For -> checkFor(node)
+            is AstNode.Break -> AstNode.Break(TypeData.Empty(node.extra))
+            is AstNode.Continue -> AstNode.Continue(TypeData.Empty(node.extra))
             is AstNode.Expression -> checkExpression(node)
         }
     }

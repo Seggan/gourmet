@@ -11,6 +11,9 @@ class IrGenerator private constructor(private val checked: TypedAst) {
     private val scopes = ArrayDeque<Scope>()
     private var declaredVariables = ArrayDeque<MutableSet<Variable>>()
 
+    private val breaks = mutableListOf<BasicBlock>()
+    private val continues = mutableListOf<BasicBlock>()
+
     private val functions = checked.functions.keys
     private val compiledFunctions = mutableListOf<CompiledFunction>()
 
@@ -67,6 +70,8 @@ class IrGenerator private constructor(private val checked: TypedAst) {
 
             is AstNode.Assignment -> compileAssignment(node)
             is AstNode.Block -> compileBlock(node)
+            is AstNode.Break -> compileBreak()
+            is AstNode.Continue -> compileContinue()
             is AstNode.Declaration -> compileDeclaration(node)
             is AstNode.DoWhile -> compileDoWhile(node)
             is AstNode.For -> compileFor(node)
@@ -154,18 +159,20 @@ class IrGenerator private constructor(private val checked: TypedAst) {
     }
 
     private fun compileDoWhile(node: AstNode.DoWhile<TypeData>): Blocks {
-        val body = compileStatement(node.body)
         val condition = compileExpression(node.condition)
-        val endBlock = BasicBlock(emptyList(), emptySet(), emptySet())
+        val endBlock = buildBlock {}
+        val body = compileStatement(node.body)
+        doBreaksAndContinues(condition.first, endBlock.first)
         body then condition
-        condition.second.continuation = Continuation.Conditional(body.first, endBlock)
-        return body.first to endBlock
+        condition.second.continuation = Continuation.Conditional(body.first, endBlock.first)
+        return body.first to endBlock.second
     }
 
     private fun compileWhile(node: AstNode.While<TypeData>): Blocks {
         val condition = compileExpression(node.condition)
-        val body = compileStatement(node.body)
         val endBlock = buildBlock {}
+        val body = compileStatement(node.body)
+        doBreaksAndContinues(condition.first, endBlock.first)
         condition.second.continuation = Continuation.Conditional(body.first, endBlock.first)
         body then condition
         return condition.first to endBlock.second
@@ -175,19 +182,40 @@ class IrGenerator private constructor(private val checked: TypedAst) {
         scopes.addFirst(Scope())
         val init = node.init?.let(::compileStatement)
         val condition = compileExpression(node.condition)
-        val update = node.update?.let(::compileStatement)
+        val update = node.update?.let(::compileStatement) ?: buildBlock {}
+        val endBlock = buildBlock {}
         val body = compileStatement(node.body)
-        val endBlock = BasicBlock(emptyList(), emptySet(), scopes.removeFirst().toSet())
+        doBreaksAndContinues(update.first, endBlock.first)
+        body then update then condition
+        val trueEnd = BasicBlock(emptyList(), emptySet(), scopes.removeFirst().toSet())
         if (init != null) {
             init then condition
         }
-        condition.second.continuation = Continuation.Conditional(body.first, endBlock)
-        if (update != null) {
-            body then update then condition
-        } else {
-            body then condition
+        condition.second.continuation = Continuation.Conditional(body.first, trueEnd)
+        return (init?.first ?: condition.first) to endBlock.second then trueEnd
+    }
+
+    private fun compileBreak(): Blocks {
+        val block = buildBlock {}
+        breaks.add(block.second)
+        return block
+    }
+
+    private fun compileContinue(): Blocks {
+        val block = buildBlock {}
+        continues.add(block.second)
+        return block
+    }
+
+    private fun doBreaksAndContinues(start: BasicBlock, end: BasicBlock) {
+        for (breakBlock in breaks) {
+            breakBlock.continuation = Continuation.Direct(end)
         }
-        return (init?.first ?: condition.first) to endBlock
+        for (continueBlock in continues) {
+            continueBlock.continuation = Continuation.Direct(start)
+        }
+        breaks.clear()
+        continues.clear()
     }
 
     private fun compileReturn(node: AstNode.Return<TypeData>): Blocks {

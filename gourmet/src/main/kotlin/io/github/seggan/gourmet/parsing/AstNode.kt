@@ -91,6 +91,10 @@ sealed interface AstNode<T> {
         override val extra: T
     ) : Statement<T>
 
+    data class Break<T>(override val extra: T) : Statement<T>
+
+    data class Continue<T>(override val extra: T) : Statement<T>
+
     sealed interface Expression<T> : Statement<T>
 
     data class NumberLiteral<T>(
