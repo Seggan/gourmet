@@ -13,6 +13,7 @@ repositories {
 }
 
 dependencies {
+    implementation(kotlin("stdlib"))
     antlr("org.antlr:antlr4:4.11.1")
 }
 
