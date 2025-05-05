@@ -24,7 +24,7 @@ fun read(): Number {
 }
 
 fun alloc[T](n: Number): T* {
-    let amount = n * sizeof[T]();
+    let amount = n * sizeOf[T]();
     let ptr = asm[T*]("push $heapSize;");
     asm[Nothing]("""
         push [amount];
@@ -60,12 +60,12 @@ struct Array[T] {
 }
 
 fun get[T](arr: Array[T], index: Number): T {
-    let ptr = ptrOffset[T](arr.data, index * sizeof[T]());
+    let ptr = ptrOffset[T](arr.data, index * sizeOf[T]());
     return *ptr;
 }
 
 fun set[T](arr: Array[T], index: Number, value: T) {
-    let ptr = ptrOffset[T](arr.data, index * sizeof[T]());
+    let ptr = ptrOffset[T](arr.data, index * sizeOf[T]());
     *ptr = value;
 }
 

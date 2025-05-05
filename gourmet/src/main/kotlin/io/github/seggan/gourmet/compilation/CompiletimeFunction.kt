@@ -9,7 +9,7 @@ import io.github.seggan.gourmet.typing.TypeData
 enum class CompiletimeFunction(val signature: Signature) {
     SIZEOF(
         Signature(
-            "sizeof",
+            "sizeOf",
             Type.Function(listOf(Type.Generic("T")), emptyList(), Type.Primitive.NUMBER)
         )
     ) {
