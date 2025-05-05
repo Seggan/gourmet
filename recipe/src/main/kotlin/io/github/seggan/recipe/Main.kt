@@ -15,5 +15,5 @@ fun main(args: Array<String>) {
     val parsed = Parser.parseToEnd(std + "\n" + text)
     val compiled = Compiler(file.nameWithoutExtension, parsed).compile()
     val out = Path("${file.nameWithoutExtension}.chef")
-    out.writeText(compiled.toCode())
+    out.writeText(compiled.toCode("--small" in args))
 }

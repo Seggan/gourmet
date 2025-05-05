@@ -14,11 +14,13 @@ class IrGenerator private constructor(private val checked: TypedAst) {
     private val breaks = mutableListOf<BasicBlock>()
     private val continues = mutableListOf<BasicBlock>()
 
-    private val functions = checked.functions.keys
+    private val functions = checked.functions
     private val compiledFunctions = mutableListOf<CompiledFunction>()
 
     private val noinline = mutableSetOf<Signature>()
     private val stringLiterals = mutableListOf<String>()
+
+    private lateinit var currentFunction: Signature
 
     private fun compile(): List<CompiledFunction> {
         checked.functions.values.forEach(::compileFunction)
@@ -29,8 +31,8 @@ class IrGenerator private constructor(private val checked: TypedAst) {
 
     private fun compileFunction(function: AstNode.Function<TypeData>) {
         val ftype = function.realType as Type.Function
-        val signature = Signature(function.name, ftype)
-        if ("inline" in function.attributes && signature in noinline) {
+        currentFunction = Signature(function.name, ftype)
+        if ("inline" in function.attributes && currentFunction in noinline) {
             System.err.println("Warning: inline function ${function.name} used before declaration; not inlining")
         }
         val scope = Scope()
@@ -46,7 +48,7 @@ class IrGenerator private constructor(private val checked: TypedAst) {
         }
         val body = compileBlock(function.body, false)
         head then body
-        compiledFunctions.add(CompiledFunction(signature, function.attributes, head.first))
+        compiledFunctions.add(CompiledFunction(currentFunction, function.attributes, head.first))
     }
 
     private fun compileBlock(block: AstNode.Block<TypeData>, newScope: Boolean = true): Blocks {
@@ -287,14 +289,19 @@ class IrGenerator private constructor(private val checked: TypedAst) {
             return argBlock.first to endBlock.second
         } else {
             noinline.add(signature)
+            val callsThis = signature.callsThis()
             val callBlock = argBlock then buildBlock {
-                for (variable in scopes.flatten()) {
-                    +variable.push("callStack")
+                if (callsThis) {
+                    for (variable in scopes.flatten()) {
+                        +variable.push("callStack")
+                    }
                 }
             }
             val restoreBlock = buildBlock {
-                for (variable in scopes.flatten().reversed()) {
-                    +variable.pop("callStack")
+                if (callsThis) {
+                    for (variable in scopes.flatten().reversed()) {
+                        +variable.pop("callStack")
+                    }
                 }
             }
             callBlock.second.continuation = Continuation.Call(signature, restoreBlock.first)
@@ -448,6 +455,43 @@ class IrGenerator private constructor(private val checked: TypedAst) {
             add(Insn.Push(n))
             add(Insn("for", Argument.Block(insns)))
         }
+    }
+
+    private fun Signature.callsThis(): Boolean {
+        fun callsThis(node: AstNode<TypeData>?): Boolean = when (node) {
+            is AstNode.File -> node.functions.any(::callsThis)
+            is AstNode.Function -> callsThis(node.body)
+            is AstNode.Assignment -> callsThis(node.value)
+            is AstNode.Block -> node.statements.any(::callsThis)
+            is AstNode.Break -> false
+            is AstNode.Continue -> false
+            is AstNode.Declaration -> callsThis(node.value)
+            is AstNode.DoWhile -> callsThis(node.condition) || callsThis(node.body)
+            is AstNode.BinaryExpression -> callsThis(node.left) || callsThis(node.right)
+            is AstNode.BooleanLiteral -> false
+            is AstNode.CharLiteral -> false
+            is AstNode.FunctionCall -> {
+                val signature = (node.extra as TypeData.FunctionCall).overload
+                if (signature.name == currentFunction.name) { // being conservative
+                    true
+                } else {
+                    callsThis(functions[signature])
+                }
+            }
+            is AstNode.MemberAccess -> false
+            is AstNode.NumberLiteral -> false
+            is AstNode.StringLiteral -> false
+            is AstNode.StructInstance -> node.values.unzip().second.any(::callsThis)
+            is AstNode.UnaryExpression -> callsThis(node.value)
+            is AstNode.Variable -> false
+            is AstNode.For -> callsThis(node.condition) || callsThis(node.body) || callsThis(node.init) || callsThis(node.update)
+            is AstNode.If -> callsThis(node.condition) || callsThis(node.thenBody) || callsThis(node.elseBody)
+            is AstNode.Return -> callsThis(node.value)
+            is AstNode.While -> callsThis(node.condition) || callsThis(node.body)
+            is AstNode.Struct -> false
+            null -> false
+        }
+        return callsThis(functions[this]!!)
     }
 
     inner class BlockBuilder {
