@@ -1,7 +1,6 @@
 package io.github.seggan.gourmet.compilation
 
 import io.github.seggan.gourmet.compilation.ir.Argument
-import io.github.seggan.gourmet.compilation.ir.BasicBlock
 import io.github.seggan.gourmet.compilation.ir.Insn
 import org.intellij.lang.annotations.Language
 
@@ -39,7 +38,12 @@ object PeepholeOptimizer {
             var replaced = code
             val match = regex.find(replaced)
             if (match != null) {
-                replaced = replaced.replace(match.groupValues[2], match.groupValues[1])
+                val firstVar = Regex.escapeReplacement(match.groupValues[1])
+                val secondVar = Regex.escape(match.groupValues[2])
+                replaced = replaced.replace(
+                    """$secondVar\b""".toRegex(),
+                    firstVar
+                )
             }
             replaced
         }
@@ -56,8 +60,8 @@ object PeepholeOptimizer {
         return optimized
     }
 
-    fun optimizeBlock(block: BasicBlock): BasicBlock {
-        return block.copy(insns = localizeVariables(block.insns))
+    fun optimizeBlock(insns: List<Insn>): List<Insn> {
+        return localizeVariables(insns)
     }
 
     // Places variable definitions right before first use and variable deletions
@@ -70,20 +74,16 @@ object PeepholeOptimizer {
             val firstUse = newInsns.indexOfFirst { it.insn != "def" && it.containsVariable(variable) }
             if (firstUse != -1) {
                 val defInsn = newInsns[def]
-                if (firstUse > def) {
-                    newInsns.removeAt(def)
-                    newInsns.add(firstUse - 1, defInsn)
-                }
+                newInsns.removeAt(def)
+                newInsns.add(firstUse - 1, defInsn)
             }
 
             val del = newInsns.indexOfFirst { it.insn == "del" && it.args.single() == variable }
             val lastUse = newInsns.indexOfLast { it.insn != "del" && it.containsVariable(variable) }
             if (lastUse != -1) {
                 val delInsn = newInsns[del]
-                if (lastUse < del) {
-                    newInsns.removeAt(del)
-                    newInsns.add(lastUse + 1, delInsn)
-                }
+                newInsns.removeAt(del)
+                newInsns.add(lastUse + 1, delInsn)
             }
         }
 
@@ -101,7 +101,7 @@ object PeepholeOptimizer {
     }
 
     private fun Insn.containsVariable(variable: Argument.Variable): Boolean {
-        return args.any {
+        return variable.name in insn || args.any {
             (it is Argument.Variable && it == variable) ||
                     (it is Argument.Block && it.insns.any { insn -> insn.containsVariable(variable) })
         }

@@ -1,7 +1,9 @@
 package io.github.seggan.gourmet.compilation
 
+import io.github.seggan.gourmet.compilation.ir.Argument
 import io.github.seggan.gourmet.compilation.ir.BasicBlock
 import io.github.seggan.gourmet.compilation.ir.Continuation
+import io.github.seggan.gourmet.compilation.ir.Insn
 
 class BlockOptimizer private constructor(private val head: BasicBlock) {
 
@@ -61,22 +63,44 @@ class BlockOptimizer private constructor(private val head: BasicBlock) {
     private val BasicBlock.predecessors: List<BasicBlock>
         get() = head.children.filter { it.continuation?.continuesTo(this) == true }
 
-    private fun BasicBlock.doPeepholeOptimization(): BasicBlock {
-        if (this in visited) return this
-        visited += this
-        val newBlock = PeepholeOptimizer.optimizeBlock(this)
-        blockMap[this.id] = newBlock
-        newBlock.continuation = newBlock.continuation?.map { getLatestBlock(it.doPeepholeOptimization()) }
-        return newBlock
+    private fun injectVariables(blocks: List<BasicBlock>) {
+        val hoisted = mutableSetOf<Variable>()
+        for (block in blocks) {
+            for (variable in block.declaredVariables) {
+                if (variable !in block.droppedVariables) {
+                    hoisted.add(variable)
+                }
+            }
+        }
+        for (block in blocks) {
+            val insns = block.insns.toMutableList()
+            for (variable in block.declaredVariables) {
+                if (variable !in hoisted) {
+                    for (part in variable.mapped) {
+                        insns.add(0, Insn("def", Argument.Variable(part)))
+                    }
+                }
+            }
+            for (variable in block.droppedVariables) {
+                if (variable !in hoisted) {
+                    for (part in variable.mapped) {
+                        insns.add(Insn("del", Argument.Variable(part)))
+                    }
+                }
+            }
+            block.insns = insns
+        }
     }
 
     companion object {
         fun optimize(head: BasicBlock): BasicBlock {
             return with(BlockOptimizer(head)) {
                 val optimized = head.optimizeBlock()
-                visited.clear()
-                blockMap.clear()
-                optimized.doPeepholeOptimization()
+                injectVariables(optimized.children)
+                optimized.children.forEach { block ->
+                    block.insns = PeepholeOptimizer.optimizeBlock(block.insns)
+                }
+                optimized
             }
         }
     }

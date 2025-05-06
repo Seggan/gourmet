@@ -4,7 +4,7 @@ import io.github.seggan.gourmet.compilation.Variable
 import io.github.seggan.gourmet.util.randomString
 
 data class BasicBlock(
-    val insns: List<Insn>,
+    var insns: List<Insn>,
     val declaredVariables: Set<Variable>,
     val droppedVariables: Set<Variable>,
     var continuation: Continuation? = null

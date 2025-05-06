@@ -53,18 +53,8 @@ class IrCompiler private constructor(private val functions: List<CompiledFunctio
 
     private fun compileBlock(block: BasicBlock): String {
         val sb = StringBuilder()
-        for (variable in block.declaredVariables.filterNot { it in hoisted }) {
-            for (part in variable.mapped) {
-                sb.appendLine("def $$part;")
-            }
-        }
         for (insn in block.insns) {
             sb.appendLine(insn.toIr())
-        }
-        for (variable in block.droppedVariables.filterNot { it in hoisted }) {
-            for (part in variable.mapped) {
-                sb.appendLine("del $$part;")
-            }
         }
         when (val cont = block.continuation) {
             is Continuation.Conditional -> {
