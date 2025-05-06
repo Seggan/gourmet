@@ -3,6 +3,7 @@ package io.github.seggan.gourmet.parsing
 import io.github.seggan.gourmet.antlr.GourmetParser
 import io.github.seggan.gourmet.compilation.ir.Argument
 import io.github.seggan.gourmet.compilation.ir.Insn
+import io.github.seggan.gourmet.compilation.ir.InsnMacros
 import io.github.seggan.gourmet.typing.Type
 import io.github.seggan.gourmet.typing.TypeException
 import io.github.seggan.gourmet.util.Location
@@ -69,7 +70,7 @@ enum class BinOp(private val token: Int) {
             throw TypeException("Cannot compare $left and $right", location)
         }
 
-        override fun compile() = listOf(Insn("eq", Argument.UseStack))
+        override fun compile() = InsnMacros.useStack(InsnMacros::eq)
     },
     NEQ(GourmetParser.NE) {
         override fun checkType(left: Type, right: Type, location: Location): Type {
@@ -79,10 +80,7 @@ enum class BinOp(private val token: Int) {
             throw TypeException("Cannot compare $left and $right", location)
         }
 
-        override fun compile() = listOf(
-            Insn("eq", Argument.UseStack),
-            Insn("not", Argument.UseStack)
-        )
+        override fun compile() = InsnMacros.useStack { InsnMacros.eq(it, not = true) }
     },
     LT(GourmetParser.LT) {
         override fun checkType(left: Type, right: Type, location: Location): Type {
@@ -92,7 +90,7 @@ enum class BinOp(private val token: Int) {
             throw TypeException("Cannot compare $left and $right", location)
         }
 
-        override fun compile() = listOf(Insn("lt", Argument.UseStack))
+        override fun compile() = InsnMacros.useStack(InsnMacros::lt)
     },
     GT(GourmetParser.GT) {
         override fun checkType(left: Type, right: Type, location: Location): Type {
@@ -102,7 +100,7 @@ enum class BinOp(private val token: Int) {
             throw TypeException("Cannot compare $left and $right", location)
         }
 
-        override fun compile() = listOf(Insn("gt", Argument.UseStack))
+        override fun compile() = InsnMacros.useStack(InsnMacros::gt)
     },
     LTE(GourmetParser.LE) {
         override fun checkType(left: Type, right: Type, location: Location): Type {
@@ -112,10 +110,7 @@ enum class BinOp(private val token: Int) {
             throw TypeException("Cannot compare $left and $right", location)
         }
 
-        override fun compile() = listOf(
-            Insn("gt", Argument.UseStack),
-            Insn("not", Argument.UseStack)
-        )
+        override fun compile() = InsnMacros.useStack(InsnMacros::ltOrEq)
     },
     GTE(GourmetParser.GE) {
         override fun checkType(left: Type, right: Type, location: Location): Type {
@@ -125,10 +120,7 @@ enum class BinOp(private val token: Int) {
             throw TypeException("Cannot compare $left and $right", location)
         }
 
-        override fun compile() = listOf(
-            Insn("lt", Argument.UseStack),
-            Insn("not", Argument.UseStack)
-        )
+        override fun compile() = InsnMacros.useStack(InsnMacros::gtOrEq)
     },
 
     AND(GourmetParser.AND) {
@@ -139,7 +131,7 @@ enum class BinOp(private val token: Int) {
             throw TypeException("Cannot apply AND to $left and $right", location)
         }
 
-        override fun compile() = listOf(Insn("and", Argument.UseStack))
+        override fun compile() = listOf(Insn("mul", Argument.UseStack))
     },
     OR(GourmetParser.OR) {
         override fun checkType(left: Type, right: Type, location: Location): Type {
@@ -149,7 +141,7 @@ enum class BinOp(private val token: Int) {
             throw TypeException("Cannot apply OR to $left and $right", location)
         }
 
-        override fun compile() = listOf(Insn("or", Argument.UseStack))
+        override fun compile() = listOf(Insn("add", Argument.UseStack))
     };
 
     abstract fun checkType(left: Type, right: Type, location: Location): Type

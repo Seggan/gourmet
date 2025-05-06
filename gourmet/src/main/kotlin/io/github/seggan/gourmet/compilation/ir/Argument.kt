@@ -14,6 +14,14 @@ sealed interface Argument {
 
     data class Variable(val name: String) : Argument {
         override fun toIr(): String = "$$name"
+
+        companion object {
+            val NULL = Variable("null")
+        }
+    }
+
+    data class Stack(val name: String) : Argument {
+        override fun toIr(): String = "@$name"
     }
 
     data class Block(val insns: List<Insn>) : Argument {

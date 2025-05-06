@@ -371,7 +371,8 @@ class IrGenerator private constructor(private val checked: TypedAst) {
         +Insn("del", ptr)
         val moved = Argument.Variable("moved")
         +Insn("def", moved)
-        +Insn("clone", moved)
+        +Insn("pop", moved)
+        +Insn("push", moved)
         +Insn(
             "for", Argument.Block(
                 Insn("pop", tempDeref, stack = STACK_HEAP),
@@ -410,7 +411,8 @@ class IrGenerator private constructor(private val checked: TypedAst) {
         +Insn("sub", Argument.Number(baseType.size))
         val moved = Argument.Variable("moved")
         +Insn("def", moved)
-        +Insn("clone", moved)
+        +Insn("pop", moved)
+        +Insn("push", moved)
         +Insn(
             "for", Argument.Block(
                 Insn("pop", tempRef, stack = STACK_HEAP),
