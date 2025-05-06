@@ -70,12 +70,11 @@ class IrCompiler private constructor(private val functions: List<CompiledFunctio
             is Continuation.Conditional -> {
                 sb.appendLine("def \$cond;")
                 sb.appendLine("pop \$cond;")
-                sb.appendLine("push \$cond;")
-                sb.appendLine("mul ${cont.then.state};")
-                sb.appendLine("push 1;")
-                sb.appendLine("sub \$cond;")
-                sb.appendLine("mul ${cont.otherwise.state};")
-                sb.appendLine("add { nop; };")
+                sb.appendLine("push ${cont.otherwise.state};")
+                sb.appendLine("if \$cond {")
+                sb.appendLine("  pop;")
+                sb.appendLine("  push ${cont.then.state};")
+                sb.appendLine("};")
                 sb.appendLine("pop \$state;")
                 sb.appendLine("del \$cond;")
             }
