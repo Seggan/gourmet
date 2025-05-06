@@ -1,35 +1,126 @@
 package io.github.seggan.gourmet.compilation
 
+import io.github.seggan.gourmet.compilation.ir.Argument
+import io.github.seggan.gourmet.compilation.ir.BasicBlock
+import io.github.seggan.gourmet.compilation.ir.Insn
+import org.intellij.lang.annotations.Language
+
 object PeepholeOptimizer {
 
-    private val patterns: List<Pair<Regex, String>>
+    private val replacers = listOf(
+        Replacer.Regex(
+            """push (.+?);""",
+            """(\w+) \{ nop; };""",
+            replacement = "$2 $1;"
+        ),
+        Replacer.Regex(
+            """\s*push .+?;""",
+            """pop;""",
+            replacement = ""
+        ),
+        Replacer.Regex(
+            """\s*del (.+?);""",
+            """def \1;""",
+            replacement = ""
+        ),
+        Replacer.Regex(
+            """\s*push (.+?);""",
+            """pop \1;""",
+            replacement = ""
+        ),
+        Replacer.Regex("""\s*rot 0;""", replacement = ""),
+        Replacer.Function { code ->
+            val regex = listOf(
+                """del (.+?);""",
+                """def (.+?);""",
+                """pop \2;"""
+            ).joinToString("""\n\s*""").toRegex()
 
-    init {
-        val protoPatterns = listOf(
-            listOf(
-                """push (.+?);""",
-                """(\w+) \{ nop; \};"""
-            ) to """$2 $1;""",
-            listOf(
-                """\s*push .+?;""",
-                """pop;"""
-            ) to "",
-            listOf("""\s*rot 0;""") to "",
-        )
-
-        patterns = protoPatterns.map { (patterns, replacement) ->
-            patterns.joinToString("""\n\s*""").toRegex() to replacement
+            var replaced = code
+            val match = regex.find(replaced)
+            if (match != null) {
+                replaced = replaced.replace(match.groupValues[2], match.groupValues[1])
+            }
+            replaced
         }
-    }
+    )
 
-    fun optimize(code: String): String {
+    fun optimizeRaw(code: String): String {
         var optimized = code
         do {
             val old = optimized
-            for ((pattern, replacement) in patterns) {
-                optimized = pattern.replace(optimized, replacement)
+            for (replacer in replacers) {
+                optimized = replacer.replace(optimized)
             }
         } while (old != optimized)
         return optimized
+    }
+
+    fun optimizeBlock(block: BasicBlock): BasicBlock {
+        return block.copy(insns = localizeVariables(block.insns))
+    }
+
+    // Places variable definitions right before first use and variable deletions
+    // right after last use so that the peephole optimizer can optimize them
+    private fun localizeVariables(insns: List<Insn>): List<Insn> {
+        val newInsns = insns.toMutableList()
+        val variables = insns.filter { it.insn == "def" }.mapNotNull { it.args.single() as? Argument.Variable }
+        for (variable in variables) {
+            val def = newInsns.indexOfFirst { it.insn == "def" && it.args.single() == variable }
+            val firstUse = newInsns.indexOfFirst { it.insn != "def" && it.containsVariable(variable) }
+            if (firstUse != -1) {
+                val defInsn = newInsns[def]
+                if (firstUse > def) {
+                    newInsns.removeAt(def)
+                    newInsns.add(firstUse - 1, defInsn)
+                }
+            }
+
+            val del = newInsns.indexOfFirst { it.insn == "del" && it.args.single() == variable }
+            val lastUse = newInsns.indexOfLast { it.insn != "del" && it.containsVariable(variable) }
+            if (lastUse != -1) {
+                val delInsn = newInsns[del]
+                if (lastUse < del) {
+                    newInsns.removeAt(del)
+                    newInsns.add(lastUse + 1, delInsn)
+                }
+            }
+        }
+
+        return newInsns.map {
+            it.copy(
+                args = it.args.map { arg ->
+                    if (arg is Argument.Block) {
+                        arg.copy(insns = localizeVariables(arg.insns))
+                    } else {
+                        arg
+                    }
+                }
+            )
+        }
+    }
+
+    private fun Insn.containsVariable(variable: Argument.Variable): Boolean {
+        return args.any {
+            (it is Argument.Variable && it == variable) ||
+                    (it is Argument.Block && it.insns.any { insn -> insn.containsVariable(variable) })
+        }
+    }
+
+    private sealed interface Replacer {
+        fun replace(code: String): String
+
+        class Regex(@Language("RegExp") vararg regex: String, val replacement: String) : Replacer {
+            private val regex = regex.joinToString("""\n\s*""").toRegex()
+            override fun replace(code: String): String {
+                return code.replace(regex, replacement)
+            }
+        }
+
+        data class Function(val func: (String) -> String) : Replacer {
+            override fun replace(code: String): String {
+                return func(code)
+            }
+        }
     }
 }

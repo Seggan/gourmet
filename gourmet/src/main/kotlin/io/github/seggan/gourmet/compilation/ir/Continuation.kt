@@ -11,6 +11,10 @@ sealed interface Continuation {
 
         override fun continuesTo(block: BasicBlock) = this.block === block
 
+        override fun map(mapping: (BasicBlock) -> BasicBlock): Continuation {
+            return Direct(mapping(block))
+        }
+
         override fun toString(): String {
             return "Direct(block=${block.id})"
         }
@@ -26,6 +30,10 @@ sealed interface Continuation {
 
         override fun continuesTo(block: BasicBlock) = then === block || otherwise === block
 
+        override fun map(mapping: (BasicBlock) -> BasicBlock): Continuation {
+            return Conditional(mapping(then), mapping(otherwise))
+        }
+
         override fun toString(): String {
             return "Conditional(then=${then.id}, otherwise=${otherwise.id})"
         }
@@ -38,6 +46,10 @@ sealed interface Continuation {
 
         override fun continuesTo(block: BasicBlock) = returnTo === block
 
+        override fun map(mapping: (BasicBlock) -> BasicBlock): Continuation {
+            return Call(function, mapping(returnTo))
+        }
+
         override fun toString(): String {
             return "Call(function=$function, returnTo=${returnTo.id})"
         }
@@ -46,8 +58,10 @@ sealed interface Continuation {
     data object Return : Continuation {
         override fun swap(previous: BasicBlock, new: BasicBlock): Continuation = this
         override fun continuesTo(block: BasicBlock) = false
+        override fun map(mapping: (BasicBlock) -> BasicBlock): Continuation = this
     }
 
     fun swap(previous: BasicBlock, new: BasicBlock): Continuation
     fun continuesTo(block: BasicBlock): Boolean
+    fun map(mapping: (BasicBlock) -> BasicBlock): Continuation
 }

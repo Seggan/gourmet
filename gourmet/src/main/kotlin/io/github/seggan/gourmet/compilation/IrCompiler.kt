@@ -103,7 +103,7 @@ class IrCompiler private constructor(private val functions: List<CompiledFunctio
         fullBlock.appendLine("if {")
         fullBlock.appendLine(sb.lines().joinToString("\n") { "  $it" }.trimEnd())
         fullBlock.appendLine("};")
-        return fullBlock.toString()
+        return PeepholeOptimizer.optimizeRaw(fullBlock.toString())
     }
 
     private val BasicBlock.state get() = blockStates[id]!!

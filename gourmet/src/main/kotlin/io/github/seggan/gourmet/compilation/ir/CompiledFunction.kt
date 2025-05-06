@@ -16,7 +16,7 @@ fun CompiledFunction.toGraph(): String {
     val nodes = mutableSetOf<String>()
     val edges = mutableSetOf<String>()
     for (block in children) {
-        val insns = PeepholeOptimizer.optimize(block.insns.joinToString("\n") { it.toIr() }).replace("\n", "\\n")
+        val insns = PeepholeOptimizer.optimizeRaw(block.insns.joinToString("\n") { it.toIr() }).replace("\n", "\\n")
         val declared = block.declaredVariables.joinToString(", ") { it.name }
         val dropped = block.droppedVariables.joinToString(", ") { it.name }
         val node = StringBuilder()

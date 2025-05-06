@@ -61,9 +61,23 @@ class BlockOptimizer private constructor(private val head: BasicBlock) {
     private val BasicBlock.predecessors: List<BasicBlock>
         get() = head.children.filter { it.continuation?.continuesTo(this) == true }
 
+    private fun BasicBlock.doPeepholeOptimization(): BasicBlock {
+        if (this in visited) return this
+        visited += this
+        val newBlock = PeepholeOptimizer.optimizeBlock(this)
+        blockMap[this.id] = newBlock
+        newBlock.continuation = newBlock.continuation?.map { getLatestBlock(it.doPeepholeOptimization()) }
+        return newBlock
+    }
+
     companion object {
         fun optimize(head: BasicBlock): BasicBlock {
-            return with(BlockOptimizer(head)) { head.optimizeBlock() }
+            return with(BlockOptimizer(head)) {
+                val optimized = head.optimizeBlock()
+                visited.clear()
+                blockMap.clear()
+                optimized.doPeepholeOptimization()
+            }
         }
     }
 }
