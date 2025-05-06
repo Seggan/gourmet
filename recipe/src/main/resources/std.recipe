@@ -108,32 +108,22 @@ macro lt y {
 }
 
 macro not bool {
-    def @condNot;
     def $tempNot bool;
-    @condNot.exec {
-        push 1;
-        push 0;
-        rot $tempNot;
+    push 1;
+    if $tempNot {
         pop;
-        pop $tempNot;
+        push 0;
     };
-    push $tempNot;
-    undef @condNot;
     del $tempNot;
 }
 
 macro bool val {
-    def @condBool;
     def $tempBool val;
-    @condBool.exec {
-        push 0;
-        push 1;
-        rot $tempBool;
+    push 0;
+    if $tempBool {
         pop;
-        pop $tempBool;
+        push 1;
     };
-    push $tempBool;
-    undef @condBool;
     del $tempBool;
 }
 
