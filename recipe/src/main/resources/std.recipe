@@ -85,13 +85,8 @@ macro sign {
 }
 
 macro eq y {
-    def $tempEq;
     sub y;
-    clone $tempEq;
-    mul $tempEq; // prevent negative values from causing shenanigans
-    pop $tempEq;
-    not $tempEq;
-    del $tempEq;
+    not { nop; };
 }
 
 macro gt y {
