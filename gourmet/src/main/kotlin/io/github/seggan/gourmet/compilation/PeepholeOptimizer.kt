@@ -27,15 +27,44 @@ object PeepholeOptimizer {
             """pop \1;""",
             replacement = ""
         ),
+        Replacer.Regex(
+            """(del .+?;)""",
+            """(\w+ \{ nop; };)""",
+            replacement = "$2\n$1"
+        ),
         Replacer.Regex("""\s*rot 0;""", replacement = ""),
-        Replacer.Function { code ->
+        Replacer.Function {
+            val regex = listOf(
+                """push (\d+?);""",
+                """def (.+?);""",
+                """pop \2;"""
+            ).joinToString("""\n\s*""").toRegex()
+
+            var replaced = it
+            val match = regex.find(replaced)
+            if (match != null) {
+                val num = match.groupValues[1]
+                val variable = match.groupValues[2]
+                replaced = replaced.replaceRange(match.range, "def $variable;")
+                var firstPop = replaced.indexOf("""pop $variable;""")
+                if (firstPop == -1) {
+                    firstPop = replaced.length
+                }
+                replaced = replaced.take(firstPop).replace(
+                    """(?<!(?:def|del) )${Regex.escape(variable)}\b""".toRegex(),
+                    num
+                ) + replaced.drop(firstPop)
+            }
+            replaced
+        },
+        Replacer.Function {
             val regex = listOf(
                 """del (.+?);""",
                 """def (.+?);""",
                 """pop \2;"""
             ).joinToString("""\n\s*""").toRegex()
 
-            var replaced = code
+            var replaced = it
             val match = regex.find(replaced)
             if (match != null) {
                 val firstVar = Regex.escapeReplacement(match.groupValues[1])
