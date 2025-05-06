@@ -55,11 +55,10 @@ class InsnMacros private constructor() {
         }
 
         fun sign() = insns {
-            +dup()
-            "if" {
-                val tempSign = randomVar()
-                "def"(tempSign)
-                "pop"(tempSign)
+            val tempSign = randomVar()
+            "def"(tempSign)
+            "pop"(tempSign)
+            "if"(tempSign) {
                 val randomStack = randomStack()
                 "def"(Argument.Stack(randomStack))
                 withStack(randomStack) {
@@ -69,10 +68,10 @@ class InsnMacros private constructor() {
                     "pop"(Argument.Variable.NULL)
                     "pop"(tempSign)
                 }
-                "push"(tempSign)
-                "del"(tempSign)
                 "undef"(Argument.Stack(randomStack))
             }
+            "push"(tempSign)
+            "del"(tempSign)
         }
 
         fun eq(arg: Argument, not: Boolean = false) = insns {
