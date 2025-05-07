@@ -74,7 +74,9 @@ object PeepholeOptimizer {
                 """$secondVar\b""".toRegex(),
                 firstVar
             )
-        }
+        },
+        Replacer.ConstantCondition(true),
+        Replacer.ConstantCondition(false),
     )
 
     fun optimizeRaw(code: String): String {
@@ -139,7 +141,7 @@ object PeepholeOptimizer {
         fun replace(code: String): String
 
         class RegexReplace(@Language("RegExp") vararg regex: String, val replacement: String) : Replacer {
-            private val regex = regex.joinToString("""\n\s*""").toRegex()
+            private val regex = regex.joinToString("""(?:\n\s*)+""").toRegex()
             override fun replace(code: String): String {
                 return code.replace(regex, replacement)
             }
@@ -149,7 +151,7 @@ object PeepholeOptimizer {
             @Language("RegExp") vararg regex: String,
             val function: (MatchResult, String) -> String
         ) : Replacer {
-            private val regex = regex.joinToString("""\n\s*""").toRegex()
+            private val regex = regex.joinToString("""(?:\n\s*)+""").toRegex()
             override fun replace(code: String): String {
                 val match = regex.find(code)
                 return if (match != null) {
@@ -163,6 +165,38 @@ object PeepholeOptimizer {
         data class Function(val func: (String) -> String) : Replacer {
             override fun replace(code: String): String {
                 return func(code)
+            }
+        }
+
+        data class ConstantCondition(val condition: Boolean) : Replacer {
+
+            private val regex = """if ${if (condition) """(\d*[1-9]\d*)""" else "0"} \{""".toRegex()
+            private val closingColon = """;\n*\s*""".toRegex()
+
+            override fun replace(code: String): String {
+                val match = regex.find(code) ?: return code
+                var closingBrace = match.range.last + 1
+                var braceCount = 1
+                while (closingBrace < code.length) {
+                    if (code[closingBrace] == '{') {
+                        braceCount++
+                    } else if (code[closingBrace] == '}') {
+                        braceCount--
+                    }
+                    if (braceCount == 0) {
+                        break
+                    }
+                    closingBrace++
+                }
+                val end = closingColon.find(code, closingBrace)!!.range.last
+                return code.replaceRange(
+                    match.range.first..end,
+                    if (condition) {
+                        code.slice((match.range.last + 1) until closingBrace)
+                    } else {
+                        ""
+                    }
+                )
             }
         }
     }
