@@ -7,85 +7,73 @@ import org.intellij.lang.annotations.Language
 object PeepholeOptimizer {
 
     private val replacers = listOf(
-        Replacer.Regex(
+        Replacer.RegexReplace(
             """push (.+?);""",
             """(\w+) \{ nop; };""",
             replacement = "$2 $1;"
         ),
-        Replacer.Regex(
+        Replacer.RegexReplace(
             """\s*push .+?;""",
             """pop;""",
             replacement = ""
         ),
-        Replacer.Regex(
+        Replacer.RegexReplace(
             """\s*del (.+?);""",
             """def \1;""",
             replacement = ""
         ),
-        Replacer.Regex(
+        Replacer.RegexReplace(
             """\s*def (.+?);""",
             """del \1;""",
             replacement = ""
         ),
-        Replacer.Regex(
+        Replacer.RegexReplace(
             """\s*push (.+?);""",
             """pop \1;""",
             replacement = ""
         ),
-        Replacer.Regex(
+        Replacer.RegexReplace(
             """(del .+?;)""",
             """(\w+ \{ nop; };)""",
             replacement = "$2\n$1"
         ),
-        Replacer.Regex(
+        Replacer.RegexReplace(
             """pop (.+?);""",
             """push \1;""",
             """del \1;""",
             replacement = "del $1;"
         ),
-        Replacer.Regex("""\s*rot 0;""", replacement = ""),
-        Replacer.Function {
-            val regex = listOf(
-                """push (\d+?);""",
-                """def (.+?);""",
-                """pop \2;"""
-            ).joinToString("""\n\s*""").toRegex()
-
-            var replaced = it
-            val match = regex.find(replaced)
-            if (match != null) {
-                val num = match.groupValues[1]
-                val variable = match.groupValues[2]
-                replaced = replaced.replaceRange(match.range, "def $variable;")
-                var firstPop = replaced.indexOf("""pop $variable;""")
-                if (firstPop == -1) {
-                    firstPop = replaced.length
-                }
-                replaced = replaced.take(firstPop).replace(
-                    """(?<!(?:def|del) )${Regex.escape(variable)}\b""".toRegex(),
-                    num
-                ) + replaced.drop(firstPop)
+        Replacer.RegexReplace("""\s*rot 0;""", replacement = ""),
+        Replacer.Regex(
+            """push (\d+?);""",
+            """def (.+?);""",
+            """pop \2;"""
+        ) { match, code ->
+            var replaced = code
+            val num = match.groupValues[1]
+            val variable = match.groupValues[2]
+            replaced = replaced.replaceRange(match.range, "def $variable;")
+            var firstPop = replaced.indexOf("""pop $variable;""")
+            if (firstPop == -1) {
+                firstPop = replaced.length
             }
+            replaced = replaced.take(firstPop).replace(
+                """(?<!(?:def|del) )${Regex.escape(variable)}\b""".toRegex(),
+                num
+            ) + replaced.drop(firstPop)
             replaced
         },
-        Replacer.Function {
-            val regex = listOf(
-                """del (.+?);""",
-                """def (.+?);""",
-                """pop \2;"""
-            ).joinToString("""\n\s*""").toRegex()
-
-            var replaced = it
-            val match = regex.find(replaced)
-            if (match != null) {
-                val firstVar = Regex.escapeReplacement(match.groupValues[1])
-                val secondVar = Regex.escape(match.groupValues[2])
-                replaced = replaced.replace(
-                    """$secondVar\b""".toRegex(),
-                    firstVar
-                )
-            }
-            replaced
+        Replacer.Regex(
+            """del (.+?);""",
+            """def (.+?);""",
+            """pop \2;"""
+        ) { match, code ->
+            val firstVar = Regex.escapeReplacement(match.groupValues[1])
+            val secondVar = Regex.escape(match.groupValues[2])
+            code.replace(
+                """$secondVar\b""".toRegex(),
+                firstVar
+            )
         }
     )
 
@@ -150,10 +138,25 @@ object PeepholeOptimizer {
     private sealed interface Replacer {
         fun replace(code: String): String
 
-        class Regex(@Language("RegExp") vararg regex: String, val replacement: String) : Replacer {
+        class RegexReplace(@Language("RegExp") vararg regex: String, val replacement: String) : Replacer {
             private val regex = regex.joinToString("""\n\s*""").toRegex()
             override fun replace(code: String): String {
                 return code.replace(regex, replacement)
+            }
+        }
+
+        class Regex(
+            @Language("RegExp") vararg regex: String,
+            val function: (MatchResult, String) -> String
+        ) : Replacer {
+            private val regex = regex.joinToString("""\n\s*""").toRegex()
+            override fun replace(code: String): String {
+                val match = regex.find(code)
+                return if (match != null) {
+                    function(match, code)
+                } else {
+                    code
+                }
             }
         }
 
