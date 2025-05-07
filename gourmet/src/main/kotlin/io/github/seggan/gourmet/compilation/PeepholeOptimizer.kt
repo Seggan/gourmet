@@ -23,11 +23,6 @@ object PeepholeOptimizer {
             replacement = ""
         ),
         Replacer.RegexReplace(
-            """\s*def (.+?);""",
-            """del \1;""",
-            replacement = ""
-        ),
-        Replacer.RegexReplace(
             """\s*push (.+?);""",
             """pop \1;""",
             replacement = ""
@@ -74,6 +69,13 @@ object PeepholeOptimizer {
                 """$secondVar\b""".toRegex(),
                 firstVar
             )
+        },
+        Replacer.Regex(
+            """def (.+?);""",
+        ) { match, code ->
+            val varName = match.groupValues[1]
+            if (code.split(varName).size > 3) return@Regex code
+            code.replace("""\n\s*(def|del) ${Regex.escape(varName)};""".toRegex(), "")
         },
         Replacer.ConstantCondition(true),
         Replacer.ConstantCondition(false),
