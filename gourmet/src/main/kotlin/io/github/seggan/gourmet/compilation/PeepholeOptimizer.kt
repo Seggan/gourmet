@@ -23,6 +23,11 @@ object PeepholeOptimizer {
             replacement = ""
         ),
         Replacer.Regex(
+            """\s*def (.+?);""",
+            """del \1;""",
+            replacement = ""
+        ),
+        Replacer.Regex(
             """\s*push (.+?);""",
             """pop \1;""",
             replacement = ""
@@ -31,6 +36,12 @@ object PeepholeOptimizer {
             """(del .+?;)""",
             """(\w+ \{ nop; };)""",
             replacement = "$2\n$1"
+        ),
+        Replacer.Regex(
+            """pop (.+?);""",
+            """push \1;""",
+            """del \1;""",
+            replacement = "del $1;"
         ),
         Replacer.Regex("""\s*rot 0;""", replacement = ""),
         Replacer.Function {
