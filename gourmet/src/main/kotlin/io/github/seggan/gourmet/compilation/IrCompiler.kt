@@ -3,6 +3,7 @@ package io.github.seggan.gourmet.compilation
 import io.github.seggan.gourmet.compilation.ir.BasicBlock
 import io.github.seggan.gourmet.compilation.ir.CompiledFunction
 import io.github.seggan.gourmet.compilation.ir.Continuation
+import io.github.seggan.gourmet.compilation.optimization.PeepholeOptimizer
 
 class IrCompiler private constructor(private val functions: List<CompiledFunction>) {
 

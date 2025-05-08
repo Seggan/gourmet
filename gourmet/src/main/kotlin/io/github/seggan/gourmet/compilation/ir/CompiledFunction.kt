@@ -1,6 +1,6 @@
 package io.github.seggan.gourmet.compilation.ir
 
-import io.github.seggan.gourmet.compilation.PeepholeOptimizer
+import io.github.seggan.gourmet.compilation.optimization.PeepholeOptimizer
 import io.github.seggan.gourmet.typing.Signature
 import io.github.seggan.gourmet.util.randomString
 

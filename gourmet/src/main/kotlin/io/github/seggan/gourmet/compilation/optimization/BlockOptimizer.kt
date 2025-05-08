@@ -1,5 +1,6 @@
-package io.github.seggan.gourmet.compilation
+package io.github.seggan.gourmet.compilation.optimization
 
+import io.github.seggan.gourmet.compilation.Variable
 import io.github.seggan.gourmet.compilation.ir.Argument
 import io.github.seggan.gourmet.compilation.ir.BasicBlock
 import io.github.seggan.gourmet.compilation.ir.Continuation

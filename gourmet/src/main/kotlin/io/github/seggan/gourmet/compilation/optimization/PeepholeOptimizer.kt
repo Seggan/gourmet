@@ -1,4 +1,4 @@
-package io.github.seggan.gourmet.compilation
+package io.github.seggan.gourmet.compilation.optimization
 
 import io.github.seggan.gourmet.compilation.ir.Argument
 import io.github.seggan.gourmet.compilation.ir.Insn
