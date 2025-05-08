@@ -13,7 +13,7 @@ enum class CompiletimeFunction(val signature: Signature) {
             Type.Function(listOf(Type.Generic("T")), emptyList(), Type.Primitive.NUMBER)
         )
     ) {
-        override fun IrGenerator.compile(function: AstNode.FunctionCall<TypeData>) = buildBlock {
+        override fun AstToIr.compile(function: AstNode.FunctionCall<TypeData>) = buildBlock {
             val call = (function.extra as TypeData.FunctionCall).call
             +Insn.Push(call.genericArgs.single().size)
         }
@@ -28,7 +28,7 @@ enum class CompiletimeFunction(val signature: Signature) {
             )
         )
     ) {
-        override fun IrGenerator.compile(function: AstNode.FunctionCall<TypeData>) = buildBlock {
+        override fun AstToIr.compile(function: AstNode.FunctionCall<TypeData>) = buildBlock {
             val literal = function.args.single()
             if (literal !is AstNode.StringLiteral) {
                 throw CompilationException("asm requires a string literal", literal.extra.location)
@@ -54,12 +54,12 @@ enum class CompiletimeFunction(val signature: Signature) {
             )
         )
     ) {
-        override fun IrGenerator.compile(function: AstNode.FunctionCall<TypeData>) =
+        override fun AstToIr.compile(function: AstNode.FunctionCall<TypeData>) =
             compileExpression(function.args.single()) // nothing changes, it just a type checker thing
     },
     ;
 
-    abstract fun IrGenerator.compile(function: AstNode.FunctionCall<TypeData>): Blocks
+    abstract fun AstToIr.compile(function: AstNode.FunctionCall<TypeData>): Blocks
 
     companion object {
         val signatures = entries.associateBy { it.signature }

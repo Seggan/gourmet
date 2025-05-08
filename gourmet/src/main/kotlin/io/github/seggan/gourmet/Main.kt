@@ -2,7 +2,7 @@ package io.github.seggan.gourmet
 
 import io.github.seggan.gourmet.antlr.GourmetLexer
 import io.github.seggan.gourmet.antlr.GourmetParser
-import io.github.seggan.gourmet.compilation.IrCompiler
+import io.github.seggan.gourmet.compilation.AstToIr
 import io.github.seggan.gourmet.compilation.IrGenerator
 import io.github.seggan.gourmet.compilation.ir.toGraph
 import io.github.seggan.gourmet.compilation.optimization.BlockOptimizer
@@ -23,12 +23,12 @@ fun main(args: Array<String>) {
     val file = Path(args[0])
     val main = std + getAst(file.name, file.inputStream())
     val checked = TypeChecker.check(main)
-    val (ir, strings) = IrGenerator.generate(checked)
+    val (ir, strings) = AstToIr.generate(checked)
     val optimized = ir.map { it.copy(body = BlockOptimizer.optimize(it.body)) }
     val dot = optimized.joinToString("\n") { it.toGraph() }
     Path("graph.dot").writeText("digraph G { $dot }")
     Runtime.getRuntime().exec("dot -Tpng graph.dot -o graph.png")
-    val asm = IrCompiler.compile(optimized, strings)
+    val asm = IrGenerator.compile(optimized, strings)
     Path("${file.nameWithoutExtension}.recipe").writeText(asm)
 }
 

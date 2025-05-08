@@ -1,8 +1,8 @@
 package io.github.seggan.gourmet.parsing
 
 import io.github.seggan.gourmet.antlr.GourmetParser
+import io.github.seggan.gourmet.compilation.AstToIr
 import io.github.seggan.gourmet.compilation.Blocks
-import io.github.seggan.gourmet.compilation.IrGenerator
 import io.github.seggan.gourmet.compilation.ir.InsnMacros
 import io.github.seggan.gourmet.typing.Type
 import io.github.seggan.gourmet.typing.TypeException
@@ -19,7 +19,7 @@ enum class UnOp(private val token: Int) {
             throw TypeException("Expected Boolean, got $arg", location)
         }
 
-        override fun IrGenerator.compile(type: Type): Blocks = buildBlock {
+        override fun AstToIr.compile(type: Type): Blocks = buildBlock {
             +InsnMacros.useStack { InsnMacros.bool(it, not = true) }
         }
     },
@@ -31,7 +31,7 @@ enum class UnOp(private val token: Int) {
             throw TypeException("Expected Number, got $arg", location)
         }
 
-        override fun IrGenerator.compile(type: Type): Blocks = buildBlock {
+        override fun AstToIr.compile(type: Type): Blocks = buildBlock {
             +InsnMacros.useStack(InsnMacros::neg)
         }
     },
@@ -43,11 +43,11 @@ enum class UnOp(private val token: Int) {
             throw TypeException("Expected a pointer, got $arg", location)
         }
 
-        override fun IrGenerator.compile(type: Type): Blocks = getPointer(type as Type.Pointer)
+        override fun AstToIr.compile(type: Type): Blocks = getPointer(type as Type.Pointer)
     };
 
     abstract fun checkType(arg: Type, location: Location): Type
-    abstract fun IrGenerator.compile(type: Type): Blocks
+    abstract fun AstToIr.compile(type: Type): Blocks
 
     companion object {
         fun fromToken(token: Token): UnOp {
