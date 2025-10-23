@@ -19,9 +19,6 @@ dependencies {
 
 kotlin {
     jvmToolchain(17)
-    compilerOptions {
-        freeCompilerArgs.set(listOf("-Xmulti-dollar-interpolation"))
-    }
 }
 
 tasks.test {
