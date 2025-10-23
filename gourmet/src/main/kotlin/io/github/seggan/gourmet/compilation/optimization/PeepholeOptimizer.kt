@@ -2,6 +2,7 @@ package io.github.seggan.gourmet.compilation.optimization
 
 import io.github.seggan.gourmet.compilation.ir.Argument
 import io.github.seggan.gourmet.compilation.ir.Insn
+import io.github.seggan.gourmet.util.findCloser
 import org.intellij.lang.annotations.Language
 
 object PeepholeOptimizer {
@@ -143,7 +144,7 @@ object PeepholeOptimizer {
         fun replace(code: String): String
 
         class RegexReplace(@Language("RegExp") vararg regex: String, val replacement: String) : Replacer {
-            private val regex = regex.joinToString("""(?:\n\s*)+""").toRegex()
+            private val regex = regex.joinToString("""(?:(?://.+?)|[\n\s])+""").toRegex()
             override fun replace(code: String): String {
                 return code.replace(regex, replacement)
             }
@@ -153,7 +154,7 @@ object PeepholeOptimizer {
             @Language("RegExp") vararg regex: String,
             val function: (MatchResult, String) -> String
         ) : Replacer {
-            private val regex = regex.joinToString("""(?:\n\s*)+""").toRegex()
+            private val regex = regex.joinToString("""(?:(?://.+?)|[\n\s])+""").toRegex()
             override fun replace(code: String): String {
                 val match = regex.find(code)
                 return if (match != null) {
@@ -177,19 +178,7 @@ object PeepholeOptimizer {
 
             override fun replace(code: String): String {
                 val match = regex.find(code) ?: return code
-                var closingBrace = match.range.last + 1
-                var braceCount = 1
-                while (closingBrace < code.length) {
-                    if (code[closingBrace] == '{') {
-                        braceCount++
-                    } else if (code[closingBrace] == '}') {
-                        braceCount--
-                    }
-                    if (braceCount == 0) {
-                        break
-                    }
-                    closingBrace++
-                }
+                val closingBrace = findCloser(code, match.range.last, '{', '}')
                 val end = closingColon.find(code, closingBrace)!!.range.last
                 return code.replaceRange(
                     match.range.first..end,

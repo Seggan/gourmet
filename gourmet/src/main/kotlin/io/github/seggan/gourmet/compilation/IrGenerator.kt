@@ -27,7 +27,7 @@ class IrGenerator private constructor(private val functions: List<CompiledFuncti
         val entry = functions.firstOrNull { "entry" in it.attributes }
             ?: throw CompilationException("No entry function found")
         val sb = StringBuilder()
-        sb.appendLine("def \$state ${entry.body.state};")
+        sb.appendLine($$"def $state $${entry.body.state};")
         sb.appendLine("def @returns;")
         sb.appendLine("def @callStack;")
         sb.appendLine("def @heap;")
@@ -37,14 +37,14 @@ class IrGenerator private constructor(private val functions: List<CompiledFuncti
                 sb.appendLine("@heap.push ${char.code};")
             }
         }
-        sb.appendLine("def \$heapSize ${stringLiterals.sumOf { it.length }};")
+        sb.appendLine($$"def $heapSize $${stringLiterals.sumOf { it.length }};")
         for (variable in hoisted) {
             for (part in variable.mapped) {
                 sb.appendLine("def $$part;")
             }
         }
         sb.appendLine("@returns.push 0;")
-        sb.appendLine("while \$state {")
+        sb.appendLine($$"while $state {")
         for (block in blocks) {
             sb.appendLine(block.lines().joinToString("\n") { "  $it" }.trimEnd())
         }
@@ -59,39 +59,37 @@ class IrGenerator private constructor(private val functions: List<CompiledFuncti
         }
         when (val cont = block.continuation) {
             is Continuation.Conditional -> {
-                sb.appendLine("def \$cond;")
-                sb.appendLine("pop \$cond;")
-                sb.appendLine("push ${cont.otherwise.state};")
-                sb.appendLine("if \$cond {")
-                sb.appendLine("  pop;")
-                sb.appendLine("  push ${cont.then.state};")
+                sb.appendLine($$"def $cond;")
+                sb.appendLine($$"pop $cond;")
+                sb.appendLine("push ${cont.otherwise.state};//[noinline]")
+                sb.appendLine($$"if $cond {")
+                sb.appendLine("pop;")
+                sb.appendLine("push ${cont.then.state};//[inline]")
                 sb.appendLine("};")
-                sb.appendLine("pop \$state;")
-                sb.appendLine("del \$cond;")
+                sb.appendLine($$"del $cond;")
+                sb.appendLine($$"pop $state;")
             }
 
             is Continuation.Direct -> {
-                sb.appendLine("push ${cont.block.state};")
-                sb.appendLine("pop \$state;")
+                sb.appendLine("push ${cont.block.state};//[inline]")
+                sb.appendLine($$"pop $state;")
             }
 
             is Continuation.Call -> {
                 sb.appendLine("@returns.push ${cont.returnTo.state};")
-                sb.appendLine("push ${entryPoints[cont.function]!!.state};")
-                sb.appendLine("pop \$state;")
+                sb.appendLine("push ${entryPoints[cont.function]!!.state};//[noinline]")
+                sb.appendLine($$"pop $state;")
             }
 
             is Continuation.Return -> {
-                sb.appendLine("@returns.pop \$state;")
+                sb.appendLine($$"@returns.pop $state;")
             }
 
             null -> throw CompilationException("Block has no continuation")
         }
 
         val fullBlock = StringBuilder()
-        fullBlock.appendLine("push \$state;")
-        fullBlock.appendLine("eq ${block.state};")
-        fullBlock.appendLine("if {")
+        fullBlock.appendLine($$"push $state; eq $${block.state}; if {")
         fullBlock.appendLine(sb.lines().joinToString("\n") { "  $it" }.trimEnd())
         fullBlock.appendLine("};")
         return PeepholeOptimizer.optimizeRaw(fullBlock.toString())
