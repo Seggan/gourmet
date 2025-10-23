@@ -77,7 +77,7 @@ class IrGenerator private constructor(private val functions: List<CompiledFuncti
 
             is Continuation.Call -> {
                 sb.appendLine("@returns.push ${cont.returnTo.state};")
-                sb.appendLine("push ${entryPoints[cont.function]!!.state};//[noinline]")
+                sb.appendLine("push ${entryPoints[cont.function]!!.state};//[inline]")
                 sb.appendLine($$"pop $state;")
             }
 

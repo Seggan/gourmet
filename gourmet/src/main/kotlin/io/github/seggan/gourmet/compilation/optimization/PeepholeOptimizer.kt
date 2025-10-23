@@ -154,7 +154,7 @@ object PeepholeOptimizer {
             @Language("RegExp") vararg regex: String,
             val function: (MatchResult, String) -> String
         ) : Replacer {
-            private val regex = regex.joinToString("""(?:(?://.+?)|[\n\s])+""").toRegex()
+            private val regex = regex.joinToString("""(?:(?://.+?)|[\n\s])*""").toRegex()
             override fun replace(code: String): String {
                 val match = regex.find(code)
                 return if (match != null) {

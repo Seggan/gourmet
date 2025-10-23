@@ -10,7 +10,7 @@ class BlockInliner private constructor(code: String) {
     private fun inlineBlocks() {
         while (true) {
             val block = getBlock() ?: break
-            if ("push $blockNum;//[noinline]" in block.code || blockNum == entryBlock || block.code.endsWith($$"@returns.pop $state;")) {
+            if ("push $blockNum;//[noinline]" in code || blockNum == entryBlock) {
                 blockNum++
                 continue
             }
@@ -48,7 +48,10 @@ class BlockInliner private constructor(code: String) {
             }
             index++
         }
-        val blockCode = code.substring(match.range.last + 1, index).trim().removeSuffix($$" pop $state;")
+        var blockCode = code.substring(match.range.last + 1, index).trim().replace(popStateRegex, "")
+        if (blockCode.endsWith($$"@returns.pop $state;")) {
+            blockCode += $$"push $state;"
+        }
         return BlockInfo(match.range.first, index + 2, blockCode)
     }
 
@@ -57,6 +60,7 @@ class BlockInliner private constructor(code: String) {
     companion object {
         private const val MAIN_LOOP_HEADER = $$"while $state {"
         private val entryPointRegex = $$"""def \$state (\d+);""".toRegex()
+        private val popStateRegex = $$"""(?<!\.)pop \$state;$""".toRegex()
 
         fun inline(code: String): String {
             val inliner = BlockInliner(code)
